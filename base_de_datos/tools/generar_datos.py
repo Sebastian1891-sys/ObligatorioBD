@@ -1,14 +1,3 @@
-"""
-Genera base_de_datos/datos.sql con datos de prueba coherentes.
-
-Simula el torneo fecha por fecha respetando las mismas reglas que la aplicación
-(suspensiones por roja, por acumulación de 3 amarillas y disciplinarias): un
-jugador suspendido no entra en la planilla y las sanciones automáticas se
-insertan junto con la tarjeta que las genera. Usa semilla fija, así que
-regenerarlo da siempre los mismos datos (cambian solo los hashes de bcrypt).
-
-    python base_de_datos/tools/generar_datos.py
-"""
 import random
 from pathlib import Path
 
@@ -16,7 +5,6 @@ import bcrypt
 
 R = random.Random(2026)
 OUT = Path(__file__).resolve().parent.parent / "datos.sql"
-
 
 def q(v):
     if v is None:
@@ -27,13 +15,11 @@ def q(v):
         return str(v)
     return "'" + str(v).replace("'", "''") + "'"
 
-
 def digito_verificador(base7):
-    """Dígito verificador de la cédula uruguaya (pesos 2987634)."""
+
     d = f"{base7:07d}"
     s = sum(int(x) * w for x, w in zip(d, (2, 9, 8, 7, 6, 3, 4)))
     return str((10 - s % 10) % 10)
-
 
 def ins(table, cols, rows):
     if not rows:
@@ -41,41 +27,36 @@ def ins(table, cols, rows):
     vals = ",\n  ".join("(" + ", ".join(q(v) for v in r) + ")" for r in rows)
     return f"INSERT INTO {table} ({', '.join(cols)}) VALUES\n  {vals};\n"
 
-
 sql = []
 w = sql.append
 
-w("-- =====================================================================\n"
-  "--  datos.sql : datos maestros y datos de prueba\n"
-  "--  GENERADO por base_de_datos/tools/generar_datos.py (no editar a mano)\n"
-  "--  Torneo 2026-S2 en curso: 6 equipos, fechas 1 a 4 disputadas,\n"
-  "--  un partido postergado, fecha 5 programada (uno cancelado),\n"
-  "--  más una edición 2027-S1 en inscripción.\n"
-  "-- =====================================================================\n"
+w("\n"
+  "\n"
+  "\n"
+  "\n"
+  "\n"
+  "\n"
+  "\n"
   "USE torneo_ucu;\n"
   "\n")
 
-# ---------------------------------------------------------------- login
 usuarios = [
     ("admin@ucu.edu.uy", "admin123", "administrador"),
     ("planillero@ucu.edu.uy", "planillero123", "planillero"),
     ("planillero2@ucu.edu.uy", "planillero123", "planillero"),
 ]
-w("-- usuarios de la aplicación (contraseñas hasheadas con bcrypt)\n")
-w("-- admin@ucu.edu.uy / admin123   ·   planillero@ucu.edu.uy / planillero123\n")
+w("\n")
+w("\n")
 w(ins("login", ["correo", "contrasena", "rol"],
       [(c, bcrypt.hashpw(p.encode(), bcrypt.gensalt(rounds=10)).decode(), r) for c, p, r in usuarios]))
 
-# ---------------------------------------------------------------- facultades
 facultades = ["Ingeniería y Tecnologías", "Ciencias Empresariales", "Derecho",
               "Ciencias de la Salud", "Ciencias Humanas", "Psicología", "Odontología"]
 w("\n" + ins("facultad", ["id_facultad", "nombre"], [(i + 1, n) for i, n in enumerate(facultades)]))
 
-# ---------------------------------------------------------------- turnos
 w("\n" + ins("turno", ["id_turno", "hora_inicio", "hora_fin"],
              [(i + 1, f"{18 + i}:00:00", f"{19 + i}:00:00") for i in range(5)]))
 
-# ---------------------------------------------------------------- complejos / canchas
 complejos = [
     (1, "Complejo Fútbol 5 Buceo", "Av. Rivera 3450", "Montevideo"),
     (2, "Arena Malvín", "Av. Italia 4820", "Montevideo"),
@@ -89,7 +70,6 @@ canchas = [
 w("\n" + ins("complejo", ["id_complejo", "nombre", "direccion", "departamento"], complejos))
 w(ins("cancha", ["nombre_cancha", "id_complejo", "superficie", "techada"], canchas))
 
-# ---------------------------------------------------------------- jugadores
 nombres = ["Mateo", "Santiago", "Joaquín", "Bruno", "Facundo", "Nicolás", "Agustín", "Martín",
            "Federico", "Gonzalo", "Diego", "Lucas", "Tomás", "Rodrigo", "Ignacio", "Pablo",
            "Valentina", "Sofía", "Camila", "Lucía", "Florencia", "Micaela", "Juan", "Sebastián",
@@ -98,13 +78,13 @@ apellidos = ["Rodríguez", "González", "Fernández", "Pérez", "Silva", "Martí
              "Díaz", "Suárez", "Pereira", "Cabrera", "Núñez", "Olivera", "Méndez", "Acosta",
              "Ferreira", "Castro", "Romero", "Álvarez", "Benítez", "Viera", "Techera", "Correa"]
 
-jugadores = []        # (ci, nombre, apellido, email, nac, fac, tipo)
+jugadores = []
 por_facultad = {}
 ci_base = 3_512_300
 used_emails = set()
 for fid in range(1, len(facultades) + 1):
     n_jug = 10 if fid <= 6 else 4
-    # perfil de tipos por facultad: 2 docentes/funcionarios como máximo en el plantel
+
     tipos = ["grado"] * 6 + ["posgrado", "docente", "funcionario", "grado"]
     if fid == 3:
         tipos = ["grado"] * 5 + ["posgrado", "posgrado", "docente", "grado", "docente"]
@@ -129,8 +109,7 @@ for fid in range(1, len(facultades) + 1):
     por_facultad[fid] = lst
 w("\n" + ins("jugador", ["ci", "nombre", "apellido", "email", "fecha_nacimiento", "id_facultad", "tipo"], jugadores))
 
-# ---------------------------------------------------------------- torneos
-w("\n-- las ediciones se crean en inscripción y luego avanzan de estado (como en la app)\n")
+w("\n\n")
 w(ins("torneo", ["id_torneo", "nombre", "anio", "semestre", "fecha_inicio", "fecha_fin", "estado"], [
     (1, "Torneo Interfacultades 2026 – 2º semestre", 2026, 2, "2026-09-07", "2026-11-30", "inscripcion"),
     (2, "Torneo Interfacultades 2027 – 1er semestre", 2027, 1, "2027-03-15", "2027-07-09", "inscripcion"),
@@ -141,7 +120,6 @@ nombres_equipo = {1: "Los Compiladores", 2: "Balance Cero", 3: "Fallo Unánime",
 equipos = [(fid, nombres_equipo[fid], 1, fid) for fid in range(1, 7)]
 w("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"], equipos))
 
-# planteles: 8 jugadores por equipo (el 8º nunca juega -> reporte de "nunca figuraron")
 planteles = {}
 filas = []
 for fid in range(1, 7):
@@ -152,11 +130,10 @@ for fid in range(1, 7):
         filas.append((fid, ci, 1, nro))
 w(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"], filas))
 
-w("\n-- capitanes (deben ser del plantel)\n")
+w("\n\n")
 for fid in range(1, 7):
     w(f"UPDATE equipo SET ci_capitan = {q(planteles[fid][0])} WHERE id_equipo = {fid};\n")
 
-# edición 2027-1 en inscripción: dos equipos, uno con plantel incompleto
 w("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"],
              [(7, "Los Compiladores 2.0", 2, 1), (8, "Sonrisa Perfecta", 2, 7)]))
 w(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"],
@@ -166,7 +143,6 @@ w(f"UPDATE equipo SET ci_capitan = {q(por_facultad[1][1])} WHERE id_equipo = 7;\
 
 w("\nUPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;\n")
 
-# ---------------------------------------------------------------- fixture (round robin, 5 fechas)
 fixture = {
     1: [(1, 6), (2, 5), (3, 4)],
     2: [(5, 1), (6, 4), (2, 3)],
@@ -175,9 +151,9 @@ fixture = {
     5: [(1, 2), (6, 3), (4, 5)],
 }
 dias = {1: "2026-09-14", 2: "2026-09-21", 3: "2026-09-28", 4: "2026-10-05", 5: "2026-11-16"}
-slots = [(1, "Cancha 1", 1), (1, "Cancha 2", 2), (2, "Central", 3)]   # (complejo, cancha, turno)
+slots = [(1, "Cancha 1", 1), (1, "Cancha 2", 2), (2, "Central", 3)]
 
-partidos = []   # dicts
+partidos = []
 pid = 0
 for f in range(1, 6):
     for i, (loc, vis) in enumerate(fixture[f]):
@@ -188,27 +164,23 @@ for f in range(1, 6):
         partidos.append(dict(id=pid, fecha=f, loc=loc, vis=vis, dia=dias[f], turno=turno,
                              comp=comp, cancha=cancha))
 
-# ---------------------------------------------------------------- simulación
-sanciones = []   # (ci, desde, cant)
-id_tarjeta = 0   # ids explícitos para poder referenciarlos desde las sanciones
+sanciones = []
+id_tarjeta = 0
 amarillas_acum = {}
-
 
 def suspendido(ci, fecha):
     return any(c_i == ci and d <= fecha <= d + c - 1 for c_i, d, c in sanciones)
 
-
-# guion para que el ejemplo sea interesante: roja en fecha 2 y alguien llega a 3 amarillas
 guion_rojas = {(2, planteles[2][2])}
 guion_amarillas = {(1, planteles[4][1]), (2, planteles[4][1]), (3, planteles[4][1]),
                    (1, planteles[1][3]), (3, planteles[1][3])}
 disciplinaria = (planteles[6][4], 4, 2, "Agresión verbal al árbitro en la fecha 3")
 
-w("\n-- ===================== FIXTURE Y PARTIDOS =====================\n")
+w("\n\n")
 for f in range(1, 6):
-    w(f"\n-- ---------- Fecha {f} ----------\n")
+    w(f"\n\n")
     if f == 4:
-        w("-- sanción disciplinaria resuelta por la organización antes de la fecha 4\n")
+        w("\n")
         w(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "observacion"],
               [(disciplinaria[0], 1, "disciplinaria", disciplinaria[1], disciplinaria[2], disciplinaria[3])]))
         sanciones.append((disciplinaria[0], disciplinaria[1], disciplinaria[2]))
@@ -218,13 +190,12 @@ for f in range(1, 6):
               [(p["id"], 1, f, p["loc"], p["vis"], p["dia"], p["turno"], p["cancha"], p["comp"], "programado")]))
         if f == 5:
             if p["loc"] == 4:
-                w(f"UPDATE partido SET estado = 'cancelado' WHERE id_partido = {p['id']};  -- cancelado por la organización\n")
+                w(f"UPDATE partido SET estado = 'cancelado' WHERE id_partido = {p['id']};  \n")
             continue
         if f == 4 and p["loc"] == 5:
-            w(f"UPDATE partido SET estado = 'postergado' WHERE id_partido = {p['id']};  -- lluvia, cancha sin techo\n")
+            w(f"UPDATE partido SET estado = 'postergado' WHERE id_partido = {p['id']};  \n")
             continue
 
-        # planilla: hasta 6 habilitados por equipo, el 8º del plantel nunca juega
         plan = []
         for eq in (p["loc"], p["vis"]):
             habil = [ci for ci in planteles[eq][:7] if not suspendido(ci, f)]
@@ -236,7 +207,7 @@ for f in range(1, 6):
             cis = [ci for e, ci in plan if e == eq]
             for _ in range(R.choice([0, 1, 1, 2, 2, 3, 4])):
                 goles.append((p["id"], R.choice(cis), R.randint(1, 50), False))
-        if p["id"] == 5:   # un autogol de ejemplo
+        if p["id"] == 5:
             goles.append((p["id"], [ci for e, ci in plan if e == p["vis"]][3], 33, True))
         goles.sort(key=lambda g: g[2])
         w(ins("gol", ["id_partido", "ci_jugador", "minuto", "autogol"], goles))
@@ -249,7 +220,7 @@ for f in range(1, 6):
         for (ff, ci) in guion_rojas:
             if ff == f and ci in en_planilla:
                 tarjetas.append((p["id"], ci, R.randint(30, 48), "roja"))
-        # alguna amarilla extra al azar (sin pasarse de 2 acumuladas para no romper el guion)
+
         for _ in range(R.randint(0, 2)):
             ci = R.choice([c for _, c in plan])
             if amarillas_acum.get(ci, 0) == 0 and all(t[1] != ci for t in tarjetas):
@@ -260,7 +231,7 @@ for f in range(1, 6):
         for _, ci, minuto, color in tarjetas:
             id_tarjeta += 1
             filas_t.append((id_tarjeta, p["id"], ci, minuto, color))
-            # misma regla que backend/app/reglas.py: roja o cada 3 amarillas = 1 fecha
+
             if color == "roja":
                 nuevas_sanciones.append((ci, 1, "roja", f + 1, 1, id_tarjeta))
                 sanciones.append((ci, f + 1, 1))
@@ -271,7 +242,7 @@ for f in range(1, 6):
                     sanciones.append((ci, f + 1, 1))
         w(ins("tarjeta", ["id_tarjeta", "id_partido", "ci_jugador", "minuto", "color"], filas_t))
         if nuevas_sanciones:
-            w("-- sanciones automáticas que generan estas tarjetas\n")
+            w("\n")
             w(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "id_tarjeta"],
                   nuevas_sanciones))
 

@@ -7,42 +7,6 @@ from fastapi import HTTPException
 
 from . import config
 
-# Mensajes para los check del esquema
-CHECK_MSG = {
-    "chk_jugador_ci": "La cédula debe tener 7 u 8 dígitos, sin puntos ni guion",
-    "chk_turno_1h": "Cada turno dura exactamente una hora",
-    "chk_jugador_email": "El email del jugador no es válido",
-    "chk_jugador_nombre": "Nombre y apellido deben tener al menos 2 caracteres",
-    "chk_jugador_nac": "Fecha de nacimiento inválida",
-    "chk_torneo_semestre": "El semestre debe ser 1 o 2",
-    "chk_torneo_fechas": "La fecha de fin debe ser posterior a la de inicio",
-    "chk_torneo_anio_ini": "La fecha de inicio debe caer en el año del torneo",
-    "chk_torneo_anio": "Año fuera de rango",
-    "chk_ejt_camiseta": "El número de camiseta debe estar entre 1 y 99",
-    "chk_complejo_depto": "Departamento inválido",
-    "chk_partido_rivales": "Un equipo no puede enfrentarse a sí mismo",
-    "chk_partido_fecha": "Número de fecha inválido",
-    "chk_gol_minuto": "El minuto debe estar entre 0 y 60",
-    "chk_tarjeta_minuto": "El minuto debe estar entre 0 y 60",
-    "chk_sancion_cant": "La sanción debe ser de 1 a 20 fechas",
-    "chk_sancion_fecha": "Número de fecha inválido",
-    "chk_sancion_auto": "Las sanciones manuales solo pueden ser disciplinarias",
-    "chk_login_correo": "Correo inválido",
-}
-
-# Mensajes para claves únicas
-UNIQUE_MSG = {
-    "PRIMARY": "Ya existe un registro con esa clave",
-    "uq_jugador_email": "Ya hay un jugador con ese email",
-    "uq_facultad_nombre": "Ya existe una facultad con ese nombre",
-    "uq_torneo_edicion": "Ya existe una edición para ese año y semestre",
-    "uq_equipo_nombre_torneo": "Ya hay un equipo con ese nombre en esta edición",
-    "uq_jugador_un_equipo_por_torneo": "El jugador ya integra otro equipo en esta edición",
-    "uq_camiseta_por_equipo": "Ese número de camiseta ya está usado en el equipo",
-    "uq_complejo_nombre": "Ya existe un complejo con ese nombre",
-    "uq_turno_inicio": "Ya existe un turno con esa hora",
-}
-
 
 def _connect(rol: str):
     user, password = config.DB_USERS[rol]
@@ -53,26 +17,17 @@ def _connect(rol: str):
         init_command=f"SET time_zone = '{config.DB_TIME_ZONE}'",
     )
 
-
-def _buscar_mensaje(texto_error: str, mensajes: dict, por_defecto: str) -> str:
-    for nombre, mensaje in mensajes.items():
-        if f"'{nombre}'" in texto_error or f".{nombre}'" in texto_error:
-            return mensaje
-    return por_defecto
-
-
 def traducir_error(e: pymysql.MySQLError) -> HTTPException:
     code = e.args[0] if e.args else 0
-    msg = str(e.args[1]) if len(e.args) > 1 else str(e)
-    if code == 1062:                                   
-        return HTTPException(409, _buscar_mensaje(msg, UNIQUE_MSG, "Registro duplicado"))
-    if code == 3819:                                   
-        return HTTPException(400, _buscar_mensaje(msg, CHECK_MSG, "Dato inválido"))
-    if code in (1451, 1217):                           
+    if code == 1062:
+        return HTTPException(409, "Ya existe un registro con esos datos")
+    if code == 3819:
+        return HTTPException(400, "Dato inválido: no cumple las restricciones de la base")
+    if code in (1451, 1217):
         return HTTPException(409, "No se puede eliminar o modificar: tiene registros asociados")
-    if code == 1452:                                   
+    if code == 1452:
         return HTTPException(400, "Referencia inválida: alguno de los datos relacionados no existe")
-    if code in (1142, 1143, 1370):                     
+    if code in (1142, 1143, 1370):
         return HTTPException(403, "Tu rol no tiene permiso para esta operación (rechazado por la base de datos)")
     if code in (1048, 1364):
         return HTTPException(400, "Falta un dato obligatorio")
@@ -82,13 +37,12 @@ def traducir_error(e: pymysql.MySQLError) -> HTTPException:
         return HTTPException(503, "No hay conexión con la base de datos")
     return HTTPException(500, f"Error de base de datos ({code})")
 
-
 def _limpiar(v):
-    """Pasa los tipos de MySQL a valores que se pueden mandar como JSON."""
-    if isinstance(v, dt.timedelta):                    # columnas time
+
+    if isinstance(v, dt.timedelta):
         s = int(v.total_seconds())
         return f"{s // 3600:02d}:{s % 3600 // 60:02d}"
-    if isinstance(v, Decimal):                         # SUM/AVG de mysql devuelven decimal
+    if isinstance(v, Decimal):
         return int(v) if v == v.to_integral_value() else float(v)
     if isinstance(v, dt.datetime):
         return v.isoformat(sep=" ", timespec="minutes")
@@ -96,28 +50,33 @@ def _limpiar(v):
         return v.isoformat()
     return v
 
-
 class Cursor:
 
     def __init__(self, cur):
         self._cur = cur
 
     def execute(self, sql, params=None) -> int:
-        """insert, update, delete. Devuelve cuántas filas fueron afectadas."""
+
         return self._cur.execute(sql, params)
 
     def all(self, sql, params=None) -> list[dict]:
-        """select devuelve todas las filas, c/u como diccionario (columna: valor)."""
+
         self._cur.execute(sql, params)
-        return [{k: _limpiar(v) for k, v in r.items()} for r in self._cur.fetchall()]
+        filas = []
+        for fila in self._cur.fetchall():
+            limpia = {}
+            for columna, valor in fila.items():
+                limpia[columna] = _limpiar(valor)
+            filas.append(limpia)
+        return filas
 
     def one(self, sql, params=None) -> dict | None:
-        """select devuelve la primera fila, o none si no hay ninguna."""
+
         rows = self.all(sql, params)
         return rows[0] if rows else None
 
     def one_or_404(self, sql, params=None, que="Registro") -> dict:
-        """Como one, pero si no hay fila responde 404 'que no encontrado'."""
+
         r = self.one(sql, params)
         if r is None:
             raise HTTPException(404, f"{que} no encontrado")
@@ -125,9 +84,8 @@ class Cursor:
 
     @property
     def lastrowid(self):
-        """id auto_increment generado por el último insert."""
-        return self._cur.lastrowid
 
+        return self._cur.lastrowid
 
 @contextmanager
 def transaccion(rol: str):

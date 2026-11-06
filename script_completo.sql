@@ -2,29 +2,25 @@ DROP DATABASE IF EXISTS torneo_ucu;
 CREATE DATABASE torneo_ucu CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE torneo_ucu;
 
--- Usuarios del sistema
-
 CREATE TABLE login (
     correo      VARCHAR(120) NOT NULL,
-    contrasena  VARCHAR(100) NOT NULL COMMENT 'hash bcrypt, nunca texto plano',
+    contrasena  VARCHAR(100) NOT NULL,
     rol         ENUM('administrador','planillero') NOT NULL,
     PRIMARY KEY (correo),
-    CONSTRAINT chk_login_correo CHECK (correo LIKE '%_@_%._%'),
-    CONSTRAINT chk_login_hash   CHECK (CHAR_LENGTH(contrasena) >= 50)
+    CHECK (correo LIKE '%_@_%._%'),
+    CHECK (CHAR_LENGTH(contrasena) >= 50)
 );
-
--- Datos maestros
 
 CREATE TABLE facultad (
     id_facultad INT NOT NULL AUTO_INCREMENT,
     nombre      VARCHAR(100) NOT NULL,
     PRIMARY KEY (id_facultad),
-    UNIQUE KEY uq_facultad_nombre (nombre),
-    CONSTRAINT chk_facultad_nombre CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2)
+    UNIQUE (nombre),
+    CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2)
 );
 
 CREATE TABLE jugador (
-    ci               VARCHAR(8)   NOT NULL COMMENT 'CI uruguaya sin puntos ni guion',
+    ci               VARCHAR(8)   NOT NULL,
     nombre           VARCHAR(60)  NOT NULL,
     apellido         VARCHAR(60)  NOT NULL,
     email            VARCHAR(120) NOT NULL,
@@ -32,12 +28,12 @@ CREATE TABLE jugador (
     id_facultad      INT          NOT NULL,
     tipo             ENUM('grado','posgrado','docente','funcionario') NOT NULL,
     PRIMARY KEY (ci),
-    UNIQUE KEY uq_jugador_email (email),
-    CONSTRAINT fk_jugador_facultad FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
-    CONSTRAINT chk_jugador_ci     CHECK (CHAR_LENGTH(ci) IN (7, 8)),
-    CONSTRAINT chk_jugador_nombre CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2 AND CHAR_LENGTH(TRIM(apellido)) >= 2),
-    CONSTRAINT chk_jugador_email  CHECK (email LIKE '%_@_%._%'),
-    CONSTRAINT chk_jugador_nac    CHECK (fecha_nacimiento >= '1930-01-01')
+    UNIQUE (email),
+    FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
+    CHECK (CHAR_LENGTH(ci) IN (7, 8)),
+    CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2 AND CHAR_LENGTH(TRIM(apellido)) >= 2),
+    CHECK (email LIKE '%_@_%._%'),
+    CHECK (fecha_nacimiento >= '1930-01-01')
 );
 
 CREATE TABLE torneo (
@@ -49,11 +45,11 @@ CREATE TABLE torneo (
     fecha_fin    DATE NOT NULL,
     estado       ENUM('inscripcion','en curso','finalizado') NOT NULL DEFAULT 'inscripcion',
     PRIMARY KEY (id_torneo),
-    UNIQUE KEY uq_torneo_edicion (anio, semestre) COMMENT 'una edición por semestre',
-    CONSTRAINT chk_torneo_anio     CHECK (anio BETWEEN 2000 AND 2100),
-    CONSTRAINT chk_torneo_semestre CHECK (semestre IN (1, 2)),
-    CONSTRAINT chk_torneo_fechas   CHECK (fecha_fin >= fecha_inicio),
-    CONSTRAINT chk_torneo_anio_ini CHECK (YEAR(fecha_inicio) = anio)
+    UNIQUE (anio, semestre),
+    CHECK (anio BETWEEN 2000 AND 2100),
+    CHECK (semestre IN (1, 2)),
+    CHECK (fecha_fin >= fecha_inicio),
+    CHECK (YEAR(fecha_inicio) = anio)
 );
 
 CREATE TABLE equipo (
@@ -61,14 +57,14 @@ CREATE TABLE equipo (
     nombre      VARCHAR(60) NOT NULL,
     id_torneo   INT NOT NULL,
     id_facultad INT NOT NULL,
-    ci_capitan  VARCHAR(8) NULL COMMENT 'NULL hasta que el plantel tenga jugadores',
+    ci_capitan  VARCHAR(8) NULL,
     PRIMARY KEY (id_equipo),
-    UNIQUE KEY uq_equipo_nombre_torneo (id_torneo, nombre),
-    UNIQUE KEY uq_equipo_torneo (id_equipo, id_torneo) COMMENT 'destino de FKs compuestas',
-    CONSTRAINT fk_equipo_torneo   FOREIGN KEY (id_torneo)   REFERENCES torneo(id_torneo),
-    CONSTRAINT fk_equipo_facultad FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
-    CONSTRAINT fk_equipo_capitan  FOREIGN KEY (ci_capitan)  REFERENCES jugador(ci),
-    CONSTRAINT chk_equipo_nombre  CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2)
+    UNIQUE (id_torneo, nombre),
+    UNIQUE (id_equipo, id_torneo),
+    FOREIGN KEY (id_torneo)   REFERENCES torneo(id_torneo),
+    FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
+    FOREIGN KEY (ci_capitan)  REFERENCES jugador(ci),
+    CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2)
 );
 
 CREATE TABLE equipo_jugador_torneo (
@@ -77,16 +73,14 @@ CREATE TABLE equipo_jugador_torneo (
     id_torneo       INT        NOT NULL,
     numero_camiseta TINYINT    NOT NULL,
     PRIMARY KEY (id_equipo, ci_jugador),
-    -- un jugador no puede integrar más de un equipo en la misma edición
-    UNIQUE KEY uq_jugador_un_equipo_por_torneo (ci_jugador, id_torneo),
-    UNIQUE KEY uq_camiseta_por_equipo (id_equipo, numero_camiseta),
-    -- el id_torneo redundante queda atado al del equipo
-    CONSTRAINT fk_ejt_equipo  FOREIGN KEY (id_equipo, id_torneo) REFERENCES equipo(id_equipo, id_torneo) ON DELETE CASCADE,
-    CONSTRAINT fk_ejt_jugador FOREIGN KEY (ci_jugador) REFERENCES jugador(ci),
-    CONSTRAINT chk_ejt_camiseta CHECK (numero_camiseta BETWEEN 1 AND 99)
-);
 
--- Infraestructura
+    UNIQUE (ci_jugador, id_torneo),
+    UNIQUE (id_equipo, numero_camiseta),
+
+    FOREIGN KEY (id_equipo, id_torneo) REFERENCES equipo(id_equipo, id_torneo) ON DELETE CASCADE,
+    FOREIGN KEY (ci_jugador) REFERENCES jugador(ci),
+    CHECK (numero_camiseta BETWEEN 1 AND 99)
+);
 
 CREATE TABLE complejo (
     id_complejo  INT NOT NULL AUTO_INCREMENT,
@@ -94,8 +88,8 @@ CREATE TABLE complejo (
     direccion    VARCHAR(150) NOT NULL,
     departamento VARCHAR(30)  NOT NULL,
     PRIMARY KEY (id_complejo),
-    UNIQUE KEY uq_complejo_nombre (nombre),
-    CONSTRAINT chk_complejo_depto CHECK (departamento IN (
+    UNIQUE (nombre),
+    CHECK (departamento IN (
         'Artigas','Canelones','Cerro Largo','Colonia','Durazno','Flores','Florida',
         'Lavalleja','Maldonado','Montevideo','Paysandú','Río Negro','Rivera','Rocha',
         'Salto','San José','Soriano','Tacuarembó','Treinta y Tres'))
@@ -107,7 +101,7 @@ CREATE TABLE cancha (
     superficie    ENUM('sintetico','parquet') NOT NULL,
     techada       BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id_complejo, nombre_cancha),
-    CONSTRAINT fk_cancha_complejo FOREIGN KEY (id_complejo) REFERENCES complejo(id_complejo) ON DELETE CASCADE
+    FOREIGN KEY (id_complejo) REFERENCES complejo(id_complejo) ON DELETE CASCADE
 );
 
 CREATE TABLE turno (
@@ -115,13 +109,10 @@ CREATE TABLE turno (
     hora_inicio TIME NOT NULL,
     hora_fin    TIME NOT NULL,
     PRIMARY KEY (id_turno),
-    UNIQUE KEY uq_turno_inicio (hora_inicio),
-    CONSTRAINT chk_turno_rango  CHECK (hora_inicio >= '18:00:00' AND hora_fin <= '23:00:00'),
-    CONSTRAINT chk_turno_1h     CHECK (hora_fin = ADDTIME(hora_inicio, '01:00:00'))
+    UNIQUE (hora_inicio),
+    CHECK (hora_inicio >= '18:00:00' AND hora_fin <= '23:00:00'),
+    CHECK (hora_fin = ADDTIME(hora_inicio, '01:00:00'))
 );
-
-
--- Partidos
 
 CREATE TABLE partido (
     id_partido          INT NOT NULL AUTO_INCREMENT,
@@ -134,20 +125,19 @@ CREATE TABLE partido (
     nombre_cancha       VARCHAR(50) NOT NULL,
     id_complejo         INT NOT NULL,
     estado              ENUM('programado','jugado','postergado','cancelado') NOT NULL DEFAULT 'programado',
-    jugado_en           DATETIME NULL COMMENT 'momento en que se marcó como jugado',
-    -- las reglas "cancha libre", "no repetir rival" y "un partido por fecha"
-    -- las controla el backend (backend/app/reglas.py) antes de guardar
+    jugado_en           DATETIME NULL,
+
     PRIMARY KEY (id_partido),
     KEY ix_partido_fecha (id_torneo, numero_fecha),
 
-    CONSTRAINT fk_partido_torneo    FOREIGN KEY (id_torneo) REFERENCES torneo(id_torneo),
-    -- ambos equipos deben pertenecer a la misma edición del partido
-    CONSTRAINT fk_partido_local     FOREIGN KEY (id_equipo_local, id_torneo)     REFERENCES equipo(id_equipo, id_torneo),
-    CONSTRAINT fk_partido_visitante FOREIGN KEY (id_equipo_visitante, id_torneo) REFERENCES equipo(id_equipo, id_torneo),
-    CONSTRAINT fk_partido_turno     FOREIGN KEY (id_turno) REFERENCES turno(id_turno),
-    CONSTRAINT fk_partido_cancha    FOREIGN KEY (id_complejo, nombre_cancha) REFERENCES cancha(id_complejo, nombre_cancha),
-    CONSTRAINT chk_partido_rivales  CHECK (id_equipo_local <> id_equipo_visitante),
-    CONSTRAINT chk_partido_fecha    CHECK (numero_fecha BETWEEN 1 AND 50)
+    FOREIGN KEY (id_torneo) REFERENCES torneo(id_torneo),
+
+    FOREIGN KEY (id_equipo_local, id_torneo)     REFERENCES equipo(id_equipo, id_torneo),
+    FOREIGN KEY (id_equipo_visitante, id_torneo) REFERENCES equipo(id_equipo, id_torneo),
+    FOREIGN KEY (id_turno) REFERENCES turno(id_turno),
+    FOREIGN KEY (id_complejo, nombre_cancha) REFERENCES cancha(id_complejo, nombre_cancha),
+    CHECK (id_equipo_local <> id_equipo_visitante),
+    CHECK (numero_fecha BETWEEN 1 AND 50)
 );
 
 CREATE TABLE planilla_partido (
@@ -155,9 +145,9 @@ CREATE TABLE planilla_partido (
     ci_jugador VARCHAR(8) NOT NULL,
     id_equipo  INT NOT NULL,
     PRIMARY KEY (id_partido, ci_jugador),
-    CONSTRAINT fk_planilla_partido FOREIGN KEY (id_partido) REFERENCES partido(id_partido),
-    -- solo jugadores del plantel del equipo indicado
-    CONSTRAINT fk_planilla_plantel FOREIGN KEY (id_equipo, ci_jugador) REFERENCES equipo_jugador_torneo(id_equipo, ci_jugador)
+    FOREIGN KEY (id_partido) REFERENCES partido(id_partido),
+
+    FOREIGN KEY (id_equipo, ci_jugador) REFERENCES equipo_jugador_torneo(id_equipo, ci_jugador)
 );
 
 CREATE TABLE gol (
@@ -167,8 +157,8 @@ CREATE TABLE gol (
     minuto     TINYINT NOT NULL,
     autogol    BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id_gol),
-    CONSTRAINT fk_gol_planilla FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
-    CONSTRAINT chk_gol_minuto  CHECK (minuto BETWEEN 0 AND 60)
+    FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
+    CHECK (minuto BETWEEN 0 AND 60)
 );
 
 CREATE TABLE tarjeta (
@@ -178,8 +168,8 @@ CREATE TABLE tarjeta (
     minuto     TINYINT NOT NULL,
     color      ENUM('amarilla','roja') NOT NULL,
     PRIMARY KEY (id_tarjeta),
-    CONSTRAINT fk_tarjeta_planilla FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
-    CONSTRAINT chk_tarjeta_minuto  CHECK (minuto BETWEEN 0 AND 60)
+    FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
+    CHECK (minuto BETWEEN 0 AND 60)
 );
 
 CREATE TABLE sancion_jugador (
@@ -189,24 +179,23 @@ CREATE TABLE sancion_jugador (
     motivo              ENUM('roja','acumulacion de amarillas','disciplinaria') NOT NULL,
     numero_fecha_inicio TINYINT NOT NULL,
     cantidad_fechas     TINYINT NOT NULL DEFAULT 1,
-    id_tarjeta          INT NULL COMMENT 'tarjeta que originó la sanción automática',
+    id_tarjeta          INT NULL,
     observacion         VARCHAR(255) NULL,
     creada_en           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id_sancion),
     KEY ix_sancion_jugador_torneo (ci_jugador, id_torneo),
-    CONSTRAINT fk_sancion_jugador FOREIGN KEY (ci_jugador) REFERENCES jugador(ci),
-    CONSTRAINT fk_sancion_torneo  FOREIGN KEY (id_torneo)  REFERENCES torneo(id_torneo),
-    CONSTRAINT fk_sancion_tarjeta FOREIGN KEY (id_tarjeta) REFERENCES tarjeta(id_tarjeta),
-    CONSTRAINT chk_sancion_fecha  CHECK (numero_fecha_inicio BETWEEN 1 AND 50),
-    CONSTRAINT chk_sancion_cant   CHECK (cantidad_fechas BETWEEN 1 AND 20),
-    CONSTRAINT chk_sancion_auto   CHECK (
+    FOREIGN KEY (ci_jugador) REFERENCES jugador(ci),
+    FOREIGN KEY (id_torneo)  REFERENCES torneo(id_torneo),
+    FOREIGN KEY (id_tarjeta) REFERENCES tarjeta(id_tarjeta),
+    CHECK (numero_fecha_inicio BETWEEN 1 AND 50),
+    CHECK (cantidad_fechas BETWEEN 1 AND 20),
+    CHECK (
         (motivo = 'disciplinaria' AND id_tarjeta IS NULL) OR
         (motivo <> 'disciplinaria' AND id_tarjeta IS NOT NULL AND cantidad_fechas = 1))
 );
 
 USE torneo_ucu;
 
--- Partido con nombres y horario legibles
 CREATE VIEW v_partido AS
 SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.dia, p.id_turno,
        t.hora_inicio, t.hora_fin, TIMESTAMP(p.dia, t.hora_fin) AS fin,
@@ -219,7 +208,6 @@ SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.dia, p.id_turno,
   JOIN equipo el   ON el.id_equipo = p.id_equipo_local
   JOIN equipo ev   ON ev.id_equipo = p.id_equipo_visitante;
 
--- Resultado calculado a partir de los goles (el autogol suma al rival)
 CREATE VIEW v_resultado AS
 SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.estado,
        p.id_equipo_local, p.id_equipo_visitante,
@@ -232,7 +220,6 @@ SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.estado,
   LEFT JOIN planilla_partido pl ON pl.id_partido = g.id_partido AND pl.ci_jugador = g.ci_jugador
  GROUP BY p.id_partido, p.id_torneo, p.numero_fecha, p.estado, p.id_equipo_local, p.id_equipo_visitante;
 
--- Una fila por equipo y partido jugado
 CREATE VIEW v_resultado_equipo AS
 SELECT id_torneo, id_partido, numero_fecha, id_equipo_local AS id_equipo,
        goles_local AS gf, goles_visitante AS gc
@@ -242,7 +229,6 @@ SELECT id_torneo, id_partido, numero_fecha, id_equipo_visitante,
        goles_visitante, goles_local
   FROM v_resultado WHERE estado = 'jugado';
 
--- Tabla de posiciones (incluye equipos que todavía no jugaron)
 CREATE VIEW v_tabla_posiciones AS
 SELECT e.id_torneo, e.id_equipo, e.nombre AS equipo, f.nombre AS facultad,
        COUNT(r.id_partido)                         AS pj,
@@ -257,20 +243,7 @@ SELECT e.id_torneo, e.id_equipo, e.nombre AS equipo, f.nombre AS facultad,
   JOIN facultad f ON f.id_facultad = e.id_facultad
   LEFT JOIN v_resultado_equipo r ON r.id_equipo = e.id_equipo
  GROUP BY e.id_torneo, e.id_equipo, e.nombre, f.nombre;
--- =====================================================================
---  usuarios.sql : usuarios de base de datos con permisos diferenciados
---
---  La aplicación NUNCA se conecta como root. Usa tres cuentas:
---    torneo_auth       -> solo lee la tabla login (para autenticar)
---    torneo_admin      -> gestiona toda la información del torneo
---    torneo_planillero -> lee lo necesario y solo escribe planillas,
---                         goles, tarjetas y el estado del partido
---  Cada request del backend usa la cuenta que corresponde al rol del
---  usuario logueado, así que aunque hubiera un bug en el backend, un
---  planillero no podría, por ejemplo, borrar un equipo.
---
---  Las contraseñas son de desarrollo: cambiarlas en producción (y en .env).
--- =====================================================================
+
 USE torneo_ucu;
 
 DROP USER IF EXISTS 'torneo_auth'@'%', 'torneo_admin'@'%', 'torneo_planillero'@'%';
@@ -279,13 +252,10 @@ CREATE USER 'torneo_auth'@'%'       IDENTIFIED BY 'Auth_Torneo_2026!';
 CREATE USER 'torneo_admin'@'%'      IDENTIFIED BY 'Admin_Torneo_2026!';
 CREATE USER 'torneo_planillero'@'%' IDENTIFIED BY 'Planillero_Torneo_2026!';
 
--- autenticación
 GRANT SELECT ON torneo_ucu.login TO 'torneo_auth'@'%';
 
--- administrador: CRUD sobre todo el esquema (no puede crear/borrar tablas ni usuarios de BD)
 GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.* TO 'torneo_admin'@'%';
 
--- planillero: lectura de lo necesario para ver partidos y planteles
 GRANT SELECT ON torneo_ucu.facultad              TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.jugador               TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.torneo                TO 'torneo_planillero'@'%';
@@ -294,35 +264,24 @@ GRANT SELECT ON torneo_ucu.equipo_jugador_torneo TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.complejo              TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.cancha                TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.turno                 TO 'torneo_planillero'@'%';
--- sanciones: el backend recalcula las automáticas (roja / 3 amarillas) cuando
--- el planillero carga o borra una tarjeta, así que necesita escribirlas
+
 GRANT SELECT, INSERT, DELETE ON torneo_ucu.sancion_jugador TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_partido             TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado           TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado_equipo    TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_tabla_posiciones    TO 'torneo_planillero'@'%';
 
--- partido: puede leerlo y cambiar ÚNICAMENTE el estado (marcar jugado) y cuándo se jugó
 GRANT SELECT ON torneo_ucu.partido TO 'torneo_planillero'@'%';
 GRANT UPDATE (estado, jugado_en) ON torneo_ucu.partido TO 'torneo_planillero'@'%';
 
--- lo que sí registra
 GRANT SELECT, INSERT, DELETE         ON torneo_ucu.planilla_partido TO 'torneo_planillero'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.gol              TO 'torneo_planillero'@'%';
 GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.tarjeta          TO 'torneo_planillero'@'%';
 
 FLUSH PRIVILEGES;
--- =====================================================================
---  datos.sql : datos maestros y datos de prueba
---  GENERADO por base_de_datos/tools/generar_datos.py (no editar a mano)
---  Torneo 2026-S2 en curso: 6 equipos, fechas 1 a 4 disputadas,
---  un partido postergado, fecha 5 programada (uno cancelado),
---  más una edición 2027-S1 en inscripción.
--- =====================================================================
+
 USE torneo_ucu;
 
--- usuarios de la aplicación (contraseñas hasheadas con bcrypt)
--- admin@ucu.edu.uy / admin123   ·   planillero@ucu.edu.uy / planillero123
 INSERT INTO login (correo, contrasena, rol) VALUES
   ('admin@ucu.edu.uy', '$2b$10$JeVp4ylUrzQYAa3SXC7fnOkfvU84JmP5KgbOWWjjpJ5xDj9PTQ9.6', 'administrador'),
   ('planillero@ucu.edu.uy', '$2b$10$9wnvF3UJsEbSjVNNQVp3Xut2.A6RulFuR1BQyoc83chnUJcG9ZiQa', 'planillero'),
@@ -421,7 +380,6 @@ INSERT INTO jugador (ci, nombre, apellido, email, fecha_nacimiento, id_facultad,
   ('65318612', 'Florencia', 'Benítez', 'florencia.benitez@correo.ucu.edu.uy', '2002-09-11', 7, 'grado'),
   ('65696391', 'Camila', 'Fernández', 'camila.fernandez@correo.ucu.edu.uy', '2004-06-06', 7, 'grado');
 
--- las ediciones se crean en inscripción y luego avanzan de estado (como en la app)
 INSERT INTO torneo (id_torneo, nombre, anio, semestre, fecha_inicio, fecha_fin, estado) VALUES
   (1, 'Torneo Interfacultades 2026 – 2º semestre', 2026, 2, '2026-09-07', '2026-11-30', 'inscripcion'),
   (2, 'Torneo Interfacultades 2027 – 1er semestre', 2027, 1, '2027-03-15', '2027-07-09', 'inscripcion');
@@ -483,7 +441,6 @@ INSERT INTO equipo_jugador_torneo (id_equipo, ci_jugador, id_torneo, numero_cami
   (6, '62237142', 1, 20),
   (6, '63002300', 1, 7);
 
--- capitanes (deben ser del plantel)
 UPDATE equipo SET ci_capitan = '35294131' WHERE id_equipo = 1;
 UPDATE equipo SET ci_capitan = '39069483' WHERE id_equipo = 2;
 UPDATE equipo SET ci_capitan = '44268583' WHERE id_equipo = 3;
@@ -508,9 +465,6 @@ UPDATE equipo SET ci_capitan = '35443653' WHERE id_equipo = 7;
 
 UPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;
 
---FIXTURE Y PARTIDOS
-
---Fecha 1
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (1, 1, 1, 1, 6, '2026-09-14', 2, 'Cancha 2', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -585,7 +539,6 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (4, 3, '49997145', 6, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 3;
 
---Fecha 2
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (4, 1, 2, 5, 1, '2026-09-21', 3, 'Central', 2, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -662,7 +615,6 @@ INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio,
   ('39805510', 1, 'roja', 3, 1, 8);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 6;
 
---Fecha 3
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (7, 1, 3, 1, 4, '2026-09-28', 1, 'Cancha 1', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -687,7 +639,7 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (9, 7, '49721588', 14, 'amarilla'),
   (10, 7, '49997145', 15, 'amarilla'),
   (11, 7, '36668381', 17, 'amarilla');
--- sanciones automáticas que generan estas tarjetas
+
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, id_tarjeta) VALUES
   ('49997145', 1, 'acumulacion de amarillas', 4, 1, 10);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 7;
@@ -733,7 +685,6 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (13, 9, '60310740', 50, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 9;
 
---Fecha 4
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, observacion) VALUES
   ('61312733', 1, 'disciplinaria', 4, 2, 'Agresión verbal al árbitro en la fecha 3');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
@@ -780,13 +731,12 @@ INSERT INTO gol (id_partido, ci_jugador, minuto, autogol) VALUES
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 11;
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (12, 1, 4, 5, 6, '2026-10-05', 4, 'Cancha A', 3, 'programado');
-UPDATE partido SET estado = 'postergado' WHERE id_partido = 12;  -- lluvia, cancha sin techo
+UPDATE partido SET estado = 'postergado' WHERE id_partido = 12;
 
---Fecha 5
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (13, 1, 5, 1, 2, '2026-11-16', 3, 'Central', 2, 'programado');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (14, 1, 5, 6, 3, '2026-11-16', 1, 'Cancha 1', 1, 'programado');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (15, 1, 5, 4, 5, '2026-11-16', 2, 'Cancha 2', 1, 'programado');
-UPDATE partido SET estado = 'cancelado' WHERE id_partido = 15;  -- cancelado por la organización
+UPDATE partido SET estado = 'cancelado' WHERE id_partido = 15;

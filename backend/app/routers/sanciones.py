@@ -1,5 +1,3 @@
-"""ABM de sanciones. Las automáticas (roja / 3 amarillas) las genera la base;
-acá se gestionan las disciplinarias."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..schemas import SancionIn, SancionUpdate
@@ -17,13 +15,11 @@ SANCION_SQL = """SELECT s.id_sancion, s.ci_jugador, j.nombre, j.apellido, s.id_t
                    LEFT JOIN equipo_jugador_torneo ejt ON ejt.ci_jugador = s.ci_jugador AND ejt.id_torneo = s.id_torneo
                    LEFT JOIN equipo e ON e.id_equipo = ejt.id_equipo"""
 
-
 @router.get("")
 def sanciones(id_torneo: int | None = None, db=Depends(db_usuario)):
     if id_torneo:
         return db.all(SANCION_SQL + " WHERE s.id_torneo = %s ORDER BY s.numero_fecha_inicio, j.apellido", (id_torneo,))
     return db.all(SANCION_SQL + " ORDER BY s.id_torneo DESC, s.numero_fecha_inicio, j.apellido")
-
 
 @router.post("", status_code=201)
 def crear_sancion(data: SancionIn, db=Depends(db_admin)):
@@ -35,12 +31,10 @@ def crear_sancion(data: SancionIn, db=Depends(db_admin)):
                (data.ci_jugador, data.id_torneo, data.numero_fecha_inicio, data.cantidad_fechas, data.observacion))
     return db.one(SANCION_SQL + " WHERE s.id_sancion = %s", (db.lastrowid,))
 
-
 def _disciplinaria(db, id_sancion):
     s = db.one_or_404("SELECT motivo FROM sancion_jugador WHERE id_sancion = %s", (id_sancion,), "Sanción")
     if s["motivo"] != "disciplinaria":
         raise HTTPException(400, "Las sanciones automáticas se corrigen modificando o borrando la tarjeta que las originó")
-
 
 @router.put("/{id_sancion}")
 def editar_sancion(id_sancion: int, data: SancionUpdate, db=Depends(db_admin)):
@@ -48,7 +42,6 @@ def editar_sancion(id_sancion: int, data: SancionUpdate, db=Depends(db_admin)):
     db.execute("UPDATE sancion_jugador SET numero_fecha_inicio=%s, cantidad_fechas=%s, observacion=%s WHERE id_sancion=%s",
                (data.numero_fecha_inicio, data.cantidad_fechas, data.observacion, id_sancion))
     return db.one(SANCION_SQL + " WHERE s.id_sancion = %s", (id_sancion,))
-
 
 @router.delete("/{id_sancion}", status_code=204)
 def borrar_sancion(id_sancion: int, db=Depends(db_admin)):

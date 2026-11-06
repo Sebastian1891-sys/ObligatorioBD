@@ -16,7 +16,7 @@ services:
 
     volumes:
       - mysql_data:/var/lib/mysql
-      # se ejecutan en orden la primera vez que se crea el volumen
+
       - ./base_de_datos/esquema.sql:/docker-entrypoint-initdb.d/01-esquema.sql:ro
       - ./base_de_datos/logica.sql:/docker-entrypoint-initdb.d/02-logica.sql:ro
       - ./base_de_datos/usuarios.sql:/docker-entrypoint-initdb.d/03-usuarios.sql:ro

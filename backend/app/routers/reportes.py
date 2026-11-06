@@ -1,41 +1,30 @@
-"""
-Reportes para el área de deportes.
-
-Cada reporte es una función que recibe la edición del torneo (id_torneo) y
-devuelve una lista de filas. Las consultas usan SQL de lo visto en el curso
-(JOIN, LEFT JOIN, GROUP BY, HAVING, subconsultas y vistas); lo que es más
-cómodo de hacer con un for (numerar posiciones, totales, porcentajes) se
-calcula en Python.
-"""
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..security import db_admin
 
 router = APIRouter(prefix="/api/reportes", tags=["reportes"])
 
-# Goles de partidos jugados, con el equipo del goleador según la planilla
 GOLES_VALIDOS = """FROM gol g
                    JOIN partido p ON p.id_partido = g.id_partido AND p.estado = 'jugado'
                    JOIN planilla_partido pl ON pl.id_partido = g.id_partido AND pl.ci_jugador = g.ci_jugador"""
 
-
 def porcentaje(parte, total):
-    return round(100 * parte / total, 1) if total else 0
+    if total == 0:
+        return 0
+    return round(100 * parte / total, 1)
 
-
-# 1 --------------------------------------------------------------------
 def posiciones(db, t):
     filas = db.all("""SELECT equipo, facultad, pj, pg, pe, pp, gf, gc, dg, pts
                         FROM v_tabla_posiciones
                        WHERE id_torneo = %s
                        ORDER BY pts DESC, dg DESC, gf DESC, equipo""", (t,))
     resultado = []
-    for i, f in enumerate(filas, start=1):            # la posición es el número de fila
-        resultado.append({"pos": i, **f})
+    for i, f in enumerate(filas, start=1):
+        fila = {"pos": i}
+        fila.update(f)
+        resultado.append(fila)
     return resultado
 
-
-# 2 --------------------------------------------------------------------
 def goleadores(db, t):
     return db.all(f"""SELECT j.ci, CONCAT(j.nombre, ' ', j.apellido) AS jugador, e.nombre AS equipo,
                              COUNT(*) AS goles,
@@ -48,10 +37,8 @@ def goleadores(db, t):
                        ORDER BY goles DESC, j.apellido, j.nombre
                        LIMIT 10""", (t,))
 
-
-# 3 --------------------------------------------------------------------
 def fair_play(db, t):
-    # LEFT JOIN para que también aparezcan los equipos sin tarjetas
+
     return db.all("""SELECT e.nombre AS equipo,
                             SUM(CASE WHEN t.color = 'amarilla' THEN 1 ELSE 0 END) AS amarillas,
                             SUM(CASE WHEN t.color = 'roja' THEN 1 ELSE 0 END)     AS rojas,
@@ -65,8 +52,6 @@ def fair_play(db, t):
                       GROUP BY e.id_equipo, e.nombre
                       ORDER BY puntaje, rojas, e.nombre""", (t,))
 
-
-# 4 --------------------------------------------------------------------
 def promedio_goles(db, t):
     por_fecha = db.all("""SELECT numero_fecha,
                                  COUNT(*) AS partidos_jugados,
@@ -89,8 +74,9 @@ def promedio_goles(db, t):
                           "promedio": round(total_goles / total_partidos, 2)})
     return resultado
 
+def orden_cancha(fila):
+    return (-fila["total_cancha"], -fila["partidos"], fila["cancha"], fila["turno"])
 
-# 5 --------------------------------------------------------------------
 def canchas_turnos(db, t):
     filas = db.all("""SELECT c.nombre AS complejo, p.nombre_cancha, tu.hora_inicio, tu.hora_fin,
                              COUNT(*) AS partidos,
@@ -100,7 +86,7 @@ def canchas_turnos(db, t):
                         JOIN turno tu   ON tu.id_turno = p.id_turno
                        WHERE p.id_torneo = %s AND p.estado IN ('programado', 'jugado')
                        GROUP BY c.nombre, p.nombre_cancha, tu.hora_inicio, tu.hora_fin""", (t,))
-    # totales por cancha y por turno, sumando las filas de cada grupo
+
     total_cancha = {}
     total_turno = {}
     for f in filas:
@@ -114,11 +100,9 @@ def canchas_turnos(db, t):
         resultado.append({"cancha": f["cancha"], "turno": f["turno"], "partidos": f["partidos"],
                           "jugados": f["jugados"], "total_cancha": total_cancha[f["cancha"]],
                           "total_turno": total_turno[f["turno"]]})
-    resultado.sort(key=lambda r: (-r["total_cancha"], -r["partidos"], r["cancha"], r["turno"]))
+    resultado.sort(key=orden_cancha)
     return resultado
 
-
-# 6 --------------------------------------------------------------------
 def jugadores_facultad_tipo(db, t):
     return db.all("""SELECT f.nombre AS facultad,
                             SUM(CASE WHEN j.tipo = 'grado' THEN 1 ELSE 0 END)       AS grado,
@@ -133,8 +117,6 @@ def jugadores_facultad_tipo(db, t):
                       GROUP BY f.id_facultad, f.nombre
                       ORDER BY total DESC, facultad""", (t,))
 
-
-# 7 --------------------------------------------------------------------
 def nunca_jugaron(db, t):
     return db.all("""SELECT j.ci, CONCAT(j.nombre, ' ', j.apellido) AS jugador, j.tipo, e.nombre AS equipo,
                             ejt.numero_camiseta AS camiseta
@@ -148,8 +130,6 @@ def nunca_jugaron(db, t):
                                           WHERE p.id_torneo = ejt.id_torneo)
                       ORDER BY e.nombre, j.apellido""", (t,))
 
-
-# 8 --------------------------------------------------------------------
 def sanciones_equipo(db, t):
     return db.all("""SELECT e.nombre AS equipo,
                             SUM(CASE WHEN s.motivo = 'roja' THEN 1 ELSE 0 END) AS roja,
@@ -164,8 +144,6 @@ def sanciones_equipo(db, t):
                       GROUP BY e.id_equipo, e.nombre
                       ORDER BY total DESC, e.nombre""", (t,))
 
-
-# 9 --------------------------------------------------------------------
 def estado_partidos(db, t):
     filas = db.all("""SELECT estado, COUNT(*) AS partidos
                         FROM partido WHERE id_torneo = %s
@@ -174,16 +152,18 @@ def estado_partidos(db, t):
     for f in filas:
         total += f["partidos"]
     orden = ["jugado", "postergado", "cancelado", "programado"]
-    filas.sort(key=lambda f: orden.index(f["estado"]))
+    ordenadas = []
+    for estado in orden:
+        for fila in filas:
+            if fila["estado"] == estado:
+                ordenadas.append(fila)
+    filas = ordenadas
     for f in filas:
         f["porcentaje"] = porcentaje(f["partidos"], total)
     return filas
 
-
-# ---------- 3 consultas adicionales propuestas por el grupo ----------
-# 10: a quién le conviene cuidarse en la próxima fecha
 def riesgo_suspension(db, t):
-    # con 2, 5, 8... amarillas, la próxima lo suspende
+
     return db.all("""SELECT j.ci, CONCAT(j.nombre, ' ', j.apellido) AS jugador, e.nombre AS equipo,
                             COUNT(*) AS amarillas_acumuladas
                        FROM tarjeta t
@@ -196,13 +176,11 @@ def riesgo_suspension(db, t):
                      HAVING COUNT(*) %% 3 = 2
                       ORDER BY e.nombre, jugador""", (t,))
 
-
-# 11: en qué momento del partido se convierten los goles
 def goles_por_tramo(db, t):
     minutos = db.all(f"SELECT g.minuto {GOLES_VALIDOS} WHERE p.id_torneo = %s", (t,))
     por_tramo = {}
     for m in minutos:
-        tramo = min(m["minuto"], 59) // 10            # 0-9 -> 0, 10-19 -> 1, ... (el 60 va al último)
+        tramo = min(m["minuto"], 59) // 10
         por_tramo[tramo] = por_tramo.get(tramo, 0) + 1
     total = len(minutos)
     resultado = []
@@ -212,8 +190,10 @@ def goles_por_tramo(db, t):
                           "porcentaje": porcentaje(por_tramo[tramo], total)})
     return resultado
 
+def orden_rendimiento(fila):
+    puntos = fila["pts_local"] + fila["pts_visitante"]
+    return (-puntos, fila["equipo"])
 
-# 12: rendimiento de cada equipo jugando de local y de visitante
 def local_visitante(db, t):
     partidos = db.all("""SELECT id_equipo_local, id_equipo_visitante, goles_local, goles_visitante
                            FROM v_resultado WHERE id_torneo = %s AND estado = 'jugado'""", (t,))
@@ -236,11 +216,10 @@ def local_visitante(db, t):
             elif p["id_equipo_visitante"] == e["id_equipo"]:
                 fila["pj_visitante"] += 1
                 fila["pts_visitante"] += puntos(p["goles_visitante"], p["goles_local"])
-        if fila["pj_local"] + fila["pj_visitante"] > 0:     # solo equipos que jugaron
+        if fila["pj_local"] + fila["pj_visitante"] > 0:
             resultado.append(fila)
-    resultado.sort(key=lambda f: (-(f["pts_local"] + f["pts_visitante"]), f["equipo"]))
+    resultado.sort(key=orden_rendimiento)
     return resultado
-
 
 REPORTES = {
     "posiciones": ("Tabla de posiciones", posiciones),
@@ -257,11 +236,12 @@ REPORTES = {
     "local_visitante": ("[Extra] Rendimiento como local y como visitante", local_visitante),
 }
 
-
 @router.get("")
 def listar():
-    return [{"clave": k, "titulo": v[0]} for k, v in REPORTES.items()]
-
+    resultado = []
+    for clave, datos in REPORTES.items():
+        resultado.append({"clave": clave, "titulo": datos[0]})
+    return resultado
 
 @router.get("/{clave}")
 def reporte(clave: str, id_torneo: int, db=Depends(db_admin)):

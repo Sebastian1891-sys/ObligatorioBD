@@ -1,14 +1,5 @@
--- =====================================================================
---  datos.sql : datos maestros y datos de prueba
---  GENERADO por base_de_datos/tools/generar_datos.py (no editar a mano)
---  Torneo 2026-S2 en curso: 6 equipos, fechas 1 a 4 disputadas,
---  un partido postergado, fecha 5 programada (uno cancelado),
---  más una edición 2027-S1 en inscripción.
--- =====================================================================
 USE torneo_ucu;
 
--- usuarios de la aplicación (contraseñas hasheadas con bcrypt)
--- admin@ucu.edu.uy / admin123   ·   planillero@ucu.edu.uy / planillero123
 INSERT INTO login (correo, contrasena, rol) VALUES
   ('admin@ucu.edu.uy', '$2b$10$JeVp4ylUrzQYAa3SXC7fnOkfvU84JmP5KgbOWWjjpJ5xDj9PTQ9.6', 'administrador'),
   ('planillero@ucu.edu.uy', '$2b$10$9wnvF3UJsEbSjVNNQVp3Xut2.A6RulFuR1BQyoc83chnUJcG9ZiQa', 'planillero'),
@@ -107,7 +98,6 @@ INSERT INTO jugador (ci, nombre, apellido, email, fecha_nacimiento, id_facultad,
   ('65318612', 'Florencia', 'Benítez', 'florencia.benitez@correo.ucu.edu.uy', '2002-09-11', 7, 'grado'),
   ('65696391', 'Camila', 'Fernández', 'camila.fernandez@correo.ucu.edu.uy', '2004-06-06', 7, 'grado');
 
--- las ediciones se crean en inscripción y luego avanzan de estado (como en la app)
 INSERT INTO torneo (id_torneo, nombre, anio, semestre, fecha_inicio, fecha_fin, estado) VALUES
   (1, 'Torneo Interfacultades 2026 – 2º semestre', 2026, 2, '2026-09-07', '2026-11-30', 'inscripcion'),
   (2, 'Torneo Interfacultades 2027 – 1er semestre', 2027, 1, '2027-03-15', '2027-07-09', 'inscripcion');
@@ -169,7 +159,6 @@ INSERT INTO equipo_jugador_torneo (id_equipo, ci_jugador, id_torneo, numero_cami
   (6, '62237142', 1, 20),
   (6, '63002300', 1, 7);
 
--- capitanes (deben ser del plantel)
 UPDATE equipo SET ci_capitan = '35294131' WHERE id_equipo = 1;
 UPDATE equipo SET ci_capitan = '39069483' WHERE id_equipo = 2;
 UPDATE equipo SET ci_capitan = '44268583' WHERE id_equipo = 3;
@@ -194,9 +183,6 @@ UPDATE equipo SET ci_capitan = '35443653' WHERE id_equipo = 7;
 
 UPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;
 
--- ===================== FIXTURE Y PARTIDOS =====================
-
--- ---------- Fecha 1 ----------
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (1, 1, 1, 1, 6, '2026-09-14', 2, 'Cancha 2', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -271,7 +257,6 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (4, 3, '49997145', 6, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 3;
 
--- ---------- Fecha 2 ----------
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (4, 1, 2, 5, 1, '2026-09-21', 3, 'Central', 2, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -344,12 +329,11 @@ INSERT INTO gol (id_partido, ci_jugador, minuto, autogol) VALUES
   (6, '44636211', 48, FALSE);
 INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (8, 6, '39805510', 40, 'roja');
--- sanciones automáticas que generan estas tarjetas
+
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, id_tarjeta) VALUES
   ('39805510', 1, 'roja', 3, 1, 8);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 6;
 
--- ---------- Fecha 3 ----------
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (7, 1, 3, 1, 4, '2026-09-28', 1, 'Cancha 1', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -374,7 +358,7 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (9, 7, '49721588', 14, 'amarilla'),
   (10, 7, '49997145', 15, 'amarilla'),
   (11, 7, '36668381', 17, 'amarilla');
--- sanciones automáticas que generan estas tarjetas
+
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, id_tarjeta) VALUES
   ('49997145', 1, 'acumulacion de amarillas', 4, 1, 10);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 7;
@@ -420,8 +404,6 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (13, 9, '60310740', 50, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 9;
 
--- ---------- Fecha 4 ----------
--- sanción disciplinaria resuelta por la organización antes de la fecha 4
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, observacion) VALUES
   ('61312733', 1, 'disciplinaria', 4, 2, 'Agresión verbal al árbitro en la fecha 3');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
@@ -468,13 +450,12 @@ INSERT INTO gol (id_partido, ci_jugador, minuto, autogol) VALUES
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 11;
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (12, 1, 4, 5, 6, '2026-10-05', 4, 'Cancha A', 3, 'programado');
-UPDATE partido SET estado = 'postergado' WHERE id_partido = 12;  -- lluvia, cancha sin techo
+UPDATE partido SET estado = 'postergado' WHERE id_partido = 12;
 
--- ---------- Fecha 5 ----------
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (13, 1, 5, 1, 2, '2026-11-16', 3, 'Central', 2, 'programado');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (14, 1, 5, 6, 3, '2026-11-16', 1, 'Cancha 1', 1, 'programado');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (15, 1, 5, 4, 5, '2026-11-16', 2, 'Cancha 2', 1, 'programado');
-UPDATE partido SET estado = 'cancelado' WHERE id_partido = 15;  -- cancelado por la organización
+UPDATE partido SET estado = 'cancelado' WHERE id_partido = 15;

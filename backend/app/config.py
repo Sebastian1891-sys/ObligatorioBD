@@ -1,11 +1,9 @@
-"""Configuración leída de variables de entorno (ver .env.example)."""
 import os
 
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_NAME = os.getenv("DB_NAME", "torneo_ucu")
 
-#Un usuario de base de datos por rol
 DB_USERS = {
     "auth": (os.getenv("DB_AUTH_USER", "torneo_auth"), os.getenv("DB_AUTH_PASSWORD", "Auth_Torneo_2026!")),
     "administrador": (os.getenv("DB_ADMIN_USER", "torneo_admin"), os.getenv("DB_ADMIN_PASSWORD", "Admin_Torneo_2026!")),
@@ -13,7 +11,6 @@ DB_USERS = {
                    os.getenv("DB_PLANILLERO_PASSWORD", "Planillero_Torneo_2026!")),
 }
 
-# Zona horaria de las reglas de 48 h y "el turno ya pasó"
 DB_TIME_ZONE = os.getenv("DB_TIME_ZONE", "-03:00")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "cambiar-esta-clave-en-produccion")

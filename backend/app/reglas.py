@@ -1,37 +1,18 @@
-"""
-Reglas de negocio del torneo.
-
-Cada función recibe el cursor de la transacción actual (db), hace las
-consultas SELECT que necesita y, si la regla no se cumple, corta con un
-error 400 y un mensaje para el usuario. Los endpoints las llaman ANTES de
-hacer el INSERT / UPDATE / DELETE, dentro de la misma transacción: si algo
-falla, se hace rollback y no queda nada a medias.
-
-En la base de datos quedan las validaciones de campos e integridad
-(PRIMARY KEY, FOREIGN KEY, UNIQUE, NOT NULL y CHECK); acá están las reglas
-del torneo que dependen de otros datos (cupos, fechas, estados, sanciones).
-"""
 from fastapi import HTTPException
-
 
 def error(mensaje: str):
     raise HTTPException(400, mensaje)
-
-
-# Torneo
 
 def estado_torneo(db, id_torneo: int) -> str:
     t = db.one_or_404("select estado from torneo where id_torneo = %s", (id_torneo,), "Torneo")
     return t["estado"]
 
-
 def exigir_inscripcion(db, id_torneo: int, mensaje: str):
     if estado_torneo(db, id_torneo) != "inscripcion":
         error(mensaje)
 
-
 def validar_cambio_estado_torneo(db, id_torneo: int, nuevo: str):
-    """El estado solo avanza: inscripcion, en curso,  finalizado."""
+
     actual = estado_torneo(db, id_torneo)
     if actual == nuevo:
         return
@@ -49,10 +30,6 @@ def validar_cambio_estado_torneo(db, id_torneo: int, nuevo: str):
         for e in equipos:
             if e["ci_capitan"] is None or e["jugadores"] < 5:
                 error("Todos los equipos necesitan capitán y al menos 5 jugadores para iniciar el torneo")
-
-
-
-#Equipos y planteles
 
 def validar_alta_plantel(db, id_equipo: int, ci: str):
     equipo = db.one_or_404("SELECT id_torneo, id_facultad FROM equipo WHERE id_equipo = %s",
@@ -78,17 +55,14 @@ def validar_alta_plantel(db, id_equipo: int, ci: str):
         if docentes >= 2:
             error("El plantel ya tiene 2 docentes/funcionarios (máximo permitido)")
 
-
 def validar_cambio_plantel(db, id_equipo: int):
     equipo = db.one_or_404("SELECT id_torneo FROM equipo WHERE id_equipo = %s", (id_equipo,), "Equipo")
     exigir_inscripcion(db, equipo["id_torneo"], "Los planteles solo pueden modificarse durante la inscripción")
-
 
 def validar_baja_plantel(db, id_equipo: int, ci: str):
     validar_cambio_plantel(db, id_equipo)
     if db.one("SELECT 1 FROM equipo WHERE id_equipo = %s AND ci_capitan = %s", (id_equipo, ci)):
         error("El jugador es el capitán: asigná otro capitán antes de quitarlo del plantel")
-
 
 def validar_edicion_equipo(db, id_equipo: int, id_facultad: int, ci_capitan: str | None):
     actual = db.one_or_404("SELECT id_facultad FROM equipo WHERE id_equipo = %s", (id_equipo,), "Equipo")
@@ -99,13 +73,8 @@ def validar_edicion_equipo(db, id_equipo: int, id_facultad: int, ci_capitan: str
                                  (id_equipo, ci_capitan)):
         error("El capitán debe ser un jugador del plantel del equipo")
 
-
-
-# Partidos
-
 def validar_partido(db, d, id_partido: int = 0):
-    """Reglas al programar o editar un partido. d es el PartidoIn recibido.
-    id_partido = 0 al crear; al editar se pasa el id para no compararlo consigo mismo."""
+
     torneo = db.one_or_404("SELECT estado, fecha_inicio, fecha_fin FROM torneo WHERE id_torneo = %s",
                            (d.id_torneo,), "Torneo")
     if torneo["estado"] == "finalizado":
@@ -115,7 +84,6 @@ def validar_partido(db, d, id_partido: int = 0):
     if not (torneo["fecha_inicio"] <= d.dia.isoformat() <= torneo["fecha_fin"]):
         error("El día del partido está fuera del período del torneo")
 
-   
     equipos = db.all("SELECT id_equipo FROM equipo WHERE id_torneo = %s AND id_equipo IN (%s, %s)",
                      (d.id_torneo, d.id_equipo_local, d.id_equipo_visitante))
     if len(equipos) != 2:
@@ -127,8 +95,6 @@ def validar_partido(db, d, id_partido: int = 0):
             if n < 5:
                 error("Ambos equipos deben tener al menos 5 jugadores en su plantel")
 
-        # una cancha no puede tener dos partidos el mismo día y turno
-        # (los postergados y cancelados no usan cancha)
         ocupada = db.one("""SELECT 1 FROM partido
                              WHERE id_complejo = %s AND nombre_cancha = %s AND dia = %s AND id_turno = %s
                                AND estado IN ('programado', 'jugado') AND id_partido <> %s""",
@@ -137,7 +103,7 @@ def validar_partido(db, d, id_partido: int = 0):
             error("La cancha ya tiene un partido asignado en ese día y turno")
 
     if d.estado != "cancelado":
-        # dos equipos se enfrentan una sola vez, a no ser que el partido anterior se haya cancelado
+
         repetido = db.one("""SELECT 1 FROM partido
                               WHERE id_torneo = %s AND estado <> 'cancelado' AND id_partido <> %s
                                 AND ((id_equipo_local = %s AND id_equipo_visitante = %s)
@@ -147,7 +113,6 @@ def validar_partido(db, d, id_partido: int = 0):
         if repetido:
             error("Esos equipos ya tienen un partido en esta edición (solo se puede repetir si el anterior fue cancelado)")
 
-        # cada equipo juega un solo partido por fecha
         misma_fecha = db.one("""SELECT 1 FROM partido
                                  WHERE id_torneo = %s AND numero_fecha = %s
                                    AND estado <> 'cancelado' AND id_partido <> %s
@@ -157,7 +122,6 @@ def validar_partido(db, d, id_partido: int = 0):
         if misma_fecha:
             error(f"Uno de los equipos ya tiene un partido en la fecha {d.numero_fecha}")
 
-
 def validar_edicion_partido(db, id_partido: int, nuevo_estado: str):
     p = db.one_or_404("SELECT estado FROM partido WHERE id_partido = %s", (id_partido,), "Partido")
     if p["estado"] == "jugado":
@@ -166,7 +130,6 @@ def validar_edicion_partido(db, id_partido: int, nuevo_estado: str):
         error("Un partido cancelado no puede modificarse: programá uno nuevo")
     if nuevo_estado in ("postergado", "cancelado") and tiene_planilla(db, id_partido):
         error("El partido ya tiene planilla cargada: no puede postergarse ni cancelarse")
-
 
 def validar_marcar_jugado(db, id_partido: int):
     p = db.one_or_404("SELECT estado, fin, NOW() >= fin AS ya_paso FROM v_partido WHERE id_partido = %s",
@@ -178,17 +141,11 @@ def validar_marcar_jugado(db, id_partido: int):
     if not tiene_planilla(db, id_partido):
         error("Cargá la planilla antes de marcar el partido como jugado")
 
-
 def tiene_planilla(db, id_partido: int) -> bool:
     return db.one("SELECT 1 FROM planilla_partido WHERE id_partido = %s LIMIT 1", (id_partido,)) is not None
 
-
-
-# Planilla, goles y tarjetas
-
 def validar_ventana_planilla(db, id_partido: int) -> dict:
-    """La planilla (y sus goles y tarjetas) se carga o corrige solo después de que
-    terminó el turno y dentro de las 48 horas siguientes."""
+
     p = db.one_or_404("""SELECT v.id_torneo, v.numero_fecha, v.estado, v.id_equipo_local, v.id_equipo_visitante,
                                 t.estado AS estado_torneo,
                                 NOW() < v.fin                      AS no_termino,
@@ -205,25 +162,21 @@ def validar_ventana_planilla(db, id_partido: int) -> dict:
         error("Pasaron más de 48 horas desde el partido: el resultado ya no puede corregirse")
     return p
 
-
 def jugador_suspendido(db, ci: str, id_torneo: int, numero_fecha: int) -> bool:
-    """Suspendido si alguna sanción de la edición esta en esa fecha:
-    desde numero_fecha_inicio hasta numero_fecha_inicio + cantidad_fechas - 1."""
+
     s = db.one("""SELECT 1 FROM sancion_jugador
                    WHERE ci_jugador = %s AND id_torneo = %s
                      AND %s BETWEEN numero_fecha_inicio AND numero_fecha_inicio + cantidad_fechas - 1""",
                (ci, id_torneo, numero_fecha))
     return s is not None
 
-
 def validar_alta_planilla(db, id_partido: int, ci: str, id_equipo: int):
     p = validar_ventana_planilla(db, id_partido)
     if id_equipo not in (p["id_equipo_local"], p["id_equipo_visitante"]):
         error("El jugador debe pertenecer a uno de los dos equipos del partido")
-    # que sea del plantel de ese equipo lo garantiza la FK (id_equipo, ci_jugador)
+
     if jugador_suspendido(db, ci, p["id_torneo"], p["numero_fecha"]):
         error("El jugador está suspendido para esta fecha y no puede figurar en la planilla")
-
 
 def validar_baja_planilla(db, id_partido: int, ci: str):
     validar_ventana_planilla(db, id_partido)
@@ -231,14 +184,12 @@ def validar_baja_planilla(db, id_partido: int, ci: str):
        db.one("SELECT 1 FROM tarjeta WHERE id_partido = %s AND ci_jugador = %s LIMIT 1", (id_partido, ci)):
         error("El jugador tiene goles o tarjetas en el partido: borralos antes de quitarlo de la planilla")
 
-
 def exigir_en_planilla(db, id_partido: int, ci: str):
     if not db.one("SELECT 1 FROM planilla_partido WHERE id_partido = %s AND ci_jugador = %s", (id_partido, ci)):
         error("Solo pueden convertir goles o recibir tarjetas los jugadores que figuran en la planilla")
 
-
 def validar_tarjeta(db, id_partido: int, ci: str, color: str, id_tarjeta: int = 0):
-    """id_tarjeta = 0 al agregar, al corregir se pasa para no contarla dos veces."""
+
     validar_ventana_planilla(db, id_partido)
     exigir_en_planilla(db, id_partido, ci)
     otras = db.all("""SELECT color FROM tarjeta
@@ -255,10 +206,6 @@ def validar_tarjeta(db, id_partido: int, ci: str, color: str, id_tarjeta: int = 
         error("El jugador ya fue expulsado en este partido")
     if color == "amarilla" and amarillas >= 2:
         error("Un jugador no puede recibir más de 2 amarillas en un partido")
-
-
-
-# Sanciones automáticas
 
 def recalcular_sanciones(db, ci: str, id_torneo: int):
     db.execute("""DELETE FROM sancion_jugador

@@ -1,4 +1,3 @@
-"""ABM de partidos y registro de planillas, goles y tarjetas."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import reglas
@@ -13,12 +12,10 @@ PARTIDO_SQL = """SELECT v.*, r.goles_local, r.goles_visitante,
                         (SELECT COUNT(*) FROM planilla_partido pl WHERE pl.id_partido = v.id_partido) AS en_planilla
                    FROM v_partido v JOIN v_resultado r ON r.id_partido = v.id_partido"""
 
-
 def _partido(db, id_partido):
     p = db.one_or_404(PARTIDO_SQL + " WHERE v.id_partido = %s", (id_partido,), "Partido")
     p["ya_paso"], p["editable_planilla"] = bool(p["ya_paso"]), bool(p["editable_planilla"])
     return p
-
 
 @router.get("/partidos")
 def partidos(id_torneo: int | None = None, numero_fecha: int | None = None, estado: str | None = None,
@@ -26,18 +23,16 @@ def partidos(id_torneo: int | None = None, numero_fecha: int | None = None, esta
     sql, params = PARTIDO_SQL + " WHERE 1=1", []
     for col, val in (("v.id_torneo", id_torneo), ("v.numero_fecha", numero_fecha), ("v.estado", estado)):
         if val is not None:
-            sql += f" AND {col} = %s"          # col es fijo (no viene del usuario)
+            sql += f" AND {col} = %s"
             params.append(val)
     rows = db.all(sql + " ORDER BY v.numero_fecha, v.dia, v.hora_inicio, v.complejo", params)
     for r in rows:
         r["ya_paso"], r["editable_planilla"] = bool(r["ya_paso"]), bool(r["editable_planilla"])
     return rows
 
-
 @router.get("/partidos/{id_partido}")
 def partido(id_partido: int, db=Depends(db_usuario)):
     return _partido(db, id_partido)
-
 
 @router.post("/partidos", status_code=201)
 def crear_partido(data: PartidoIn, db=Depends(db_admin)):
@@ -48,7 +43,6 @@ def crear_partido(data: PartidoIn, db=Depends(db_admin)):
                (data.id_torneo, data.numero_fecha, data.id_equipo_local, data.id_equipo_visitante,
                 data.dia, data.id_turno, data.nombre_cancha, data.id_complejo, data.estado))
     return _partido(db, db.lastrowid)
-
 
 @router.put("/partidos/{id_partido}")
 def editar_partido(id_partido: int, data: PartidoIn, db=Depends(db_admin)):
@@ -64,7 +58,6 @@ def editar_partido(id_partido: int, data: PartidoIn, db=Depends(db_admin)):
                 data.dia, data.id_turno, data.nombre_cancha, data.id_complejo, data.estado, id_partido))
     return _partido(db, id_partido)
 
-
 @router.patch("/partidos/{id_partido}/estado")
 def cambiar_estado(id_partido: int, data: PartidoEstado, db=Depends(db_usuario), u=Depends(usuario_actual)):
     if u["rol"] == "planillero" and data.estado != "jugado":
@@ -77,12 +70,14 @@ def cambiar_estado(id_partido: int, data: PartidoEstado, db=Depends(db_usuario),
         reglas.validar_marcar_jugado(db, id_partido)
         db.execute("UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = %s", (id_partido,))
     else:
-        # postergar / cancelar / volver a programar: mismas reglas que al editar
+
         reglas.validar_edicion_partido(db, id_partido, data.estado)
-        reglas.validar_partido(db, PartidoIn(**{**p, "estado": data.estado}), id_partido)
+        datos = p.copy()
+        datos["estado"] = data.estado
+        partido_actualizado = PartidoIn.model_validate(datos)
+        reglas.validar_partido(db, partido_actualizado, id_partido)
         db.execute("UPDATE partido SET estado = %s WHERE id_partido = %s", (data.estado, id_partido))
     return _partido(db, id_partido)
-
 
 @router.delete("/partidos/{id_partido}", status_code=204)
 def borrar_partido(id_partido: int, db=Depends(db_admin)):
@@ -93,8 +88,6 @@ def borrar_partido(id_partido: int, db=Depends(db_admin)):
         raise HTTPException(409, "El partido tiene planilla cargada: no se puede eliminar")
     db.execute("DELETE FROM partido WHERE id_partido = %s", (id_partido,))
 
-
-# ---------------------------------------------------------------- planilla
 @router.get("/partidos/{id_partido}/planilla")
 def ver_planilla(id_partido: int, db=Depends(db_usuario)):
     p = _partido(db, id_partido)
@@ -123,7 +116,6 @@ def ver_planilla(id_partido: int, db=Depends(db_usuario)):
         g["autogol"] = bool(g["autogol"])
     return {"partido": p, "equipos": equipos, "goles": goles, "tarjetas": tarjetas}
 
-
 @router.post("/partidos/{id_partido}/planilla", status_code=201)
 def agregar_a_planilla(id_partido: int, data: PlanillaIn, db=Depends(db_usuario)):
     reglas.validar_alta_planilla(db, id_partido, data.ci_jugador, data.id_equipo)
@@ -131,15 +123,12 @@ def agregar_a_planilla(id_partido: int, data: PlanillaIn, db=Depends(db_usuario)
                (id_partido, data.ci_jugador, data.id_equipo))
     return {"ok": True}
 
-
 @router.delete("/partidos/{id_partido}/planilla/{ci}", status_code=204)
 def quitar_de_planilla(id_partido: int, ci: str, db=Depends(db_usuario)):
     reglas.validar_baja_planilla(db, id_partido, ci)
     if db.execute("DELETE FROM planilla_partido WHERE id_partido = %s AND ci_jugador = %s", (id_partido, ci)) == 0:
         raise HTTPException(404, "El jugador no está en la planilla")
 
-
-# ---------------------------------------------------------------- goles
 @router.post("/partidos/{id_partido}/goles", status_code=201)
 def agregar_gol(id_partido: int, data: GolIn, db=Depends(db_usuario)):
     reglas.validar_ventana_planilla(db, id_partido)
@@ -148,7 +137,6 @@ def agregar_gol(id_partido: int, data: GolIn, db=Depends(db_usuario)):
                (id_partido, data.ci_jugador, data.minuto, data.autogol))
     return {"id_gol": db.lastrowid}
 
-
 @router.put("/goles/{id_gol}")
 def editar_gol(id_gol: int, data: GolUpdate, db=Depends(db_usuario)):
     g = db.one_or_404("SELECT id_partido FROM gol WHERE id_gol = %s", (id_gol,), "Gol")
@@ -156,15 +144,12 @@ def editar_gol(id_gol: int, data: GolUpdate, db=Depends(db_usuario)):
     db.execute("UPDATE gol SET minuto = %s, autogol = %s WHERE id_gol = %s", (data.minuto, data.autogol, id_gol))
     return {"ok": True}
 
-
 @router.delete("/goles/{id_gol}", status_code=204)
 def borrar_gol(id_gol: int, db=Depends(db_usuario)):
     g = db.one_or_404("SELECT id_partido FROM gol WHERE id_gol = %s", (id_gol,), "Gol")
     reglas.validar_ventana_planilla(db, g["id_partido"])
     db.execute("DELETE FROM gol WHERE id_gol = %s", (id_gol,))
 
-
-# ---------------------------------------------------------------- tarjetas
 @router.post("/partidos/{id_partido}/tarjetas", status_code=201)
 def agregar_tarjeta(id_partido: int, data: TarjetaIn, db=Depends(db_usuario)):
     reglas.validar_tarjeta(db, id_partido, data.ci_jugador, data.color)
@@ -174,10 +159,8 @@ def agregar_tarjeta(id_partido: int, data: TarjetaIn, db=Depends(db_usuario)):
     reglas.recalcular_sanciones(db, data.ci_jugador, _torneo_de(db, id_partido))
     return {"id_tarjeta": id_tarjeta}
 
-
 def _torneo_de(db, id_partido):
     return db.one("SELECT id_torneo FROM partido WHERE id_partido = %s", (id_partido,))["id_torneo"]
-
 
 @router.put("/tarjetas/{id_tarjeta}")
 def editar_tarjeta(id_tarjeta: int, data: TarjetaUpdate, db=Depends(db_usuario)):
@@ -187,12 +170,11 @@ def editar_tarjeta(id_tarjeta: int, data: TarjetaUpdate, db=Depends(db_usuario))
     reglas.recalcular_sanciones(db, t["ci_jugador"], _torneo_de(db, t["id_partido"]))
     return {"ok": True}
 
-
 @router.delete("/tarjetas/{id_tarjeta}", status_code=204)
 def borrar_tarjeta(id_tarjeta: int, db=Depends(db_usuario)):
     t = db.one_or_404("SELECT id_partido, ci_jugador FROM tarjeta WHERE id_tarjeta = %s", (id_tarjeta,), "Tarjeta")
     reglas.validar_ventana_planilla(db, t["id_partido"])
-    # primero la sanción que apunta a esta tarjeta (FK), después la tarjeta, después se recalcula
+
     db.execute("DELETE FROM sancion_jugador WHERE id_tarjeta = %s", (id_tarjeta,))
     db.execute("DELETE FROM tarjeta WHERE id_tarjeta = %s", (id_tarjeta,))
     reglas.recalcular_sanciones(db, t["ci_jugador"], _torneo_de(db, t["id_partido"]))

@@ -1,9 +1,3 @@
-/* =====================================================================
-   Torneo Interfacultades F5 – frontend (JavaScript sin frameworks)
-   Habla con la API REST del backend (/api/...). Valida en el cliente
-   con atributos HTML5 + validaciones propias (cédula, rangos, etc.).
-   ===================================================================== */
-
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -17,7 +11,6 @@ const state = {
 const esAdmin = () => state.user?.rol === "administrador";
 const torneoActual = () => state.torneos.find((t) => t.id_torneo === state.torneo);
 
-/* ---------------------------------------------------------------- API */
 async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(path, {
     method,
@@ -43,7 +36,6 @@ async function intentar(fn, okMsg) {
   catch (e) { toast(e.message, true); throw e; }
 }
 
-/* ---------------------------------------------------------------- validaciones de cliente */
 function ciValida(ci) {
   ci = String(ci).replace(/[.\-\s]/g, "");
   if (!/^\d{7,8}$/.test(ci)) return false;
@@ -61,14 +53,12 @@ const VALIDADORES = {
   },
 };
 
-/* ---------------------------------------------------------------- modal genérico de formulario
-   campos: [{name, label, type, required, options:[[value,label]], min, max, pattern, value, validar, hint}] */
 function formModal(titulo, campos, valores = {}, okText = "Guardar", error = "") {
   return new Promise((resolve) => {
     const dlg = $("#modal"), body = $("#modal-body"), form = $("#modal-form");
     $("#modal-title").textContent = titulo;
     $("#modal-ok").textContent = okText;
-    $("#modal-error").textContent = error;   // error del backend del intento anterior
+    $("#modal-error").textContent = error;
     form.classList.remove("validado");
     body.innerHTML = campos.map((c) => {
       const v = valores[c.name] ?? c.value ?? "";
@@ -87,7 +77,7 @@ function formModal(titulo, campos, valores = {}, okText = "Guardar", error = "")
 
     const cerrar = (val) => { dlg.close(); form.onsubmit = null; $("#modal-cancel").onclick = null; resolve(val); };
     $("#modal-cancel").onclick = () => cerrar(null);
-    dlg.oncancel = (e) => { e.preventDefault(); cerrar(null); };   // tecla Escape
+    dlg.oncancel = (e) => { e.preventDefault(); cerrar(null); };
     form.onsubmit = (ev) => {
       ev.preventDefault();
       const datos = {};
@@ -114,31 +104,28 @@ function formModal(titulo, campos, valores = {}, okText = "Guardar", error = "")
 }
 const confirmar = (msg) => formModal(msg, [], {}, "Confirmar").then((r) => r !== null);
 
-/* guarda con el modal y reabre si el backend rechaza (muestra el error) */
 async function guardarConModal(titulo, campos, valores, accion) {
   let v = valores, error = "";
   while (true) {
     const datos = await formModal(titulo, campos, v, "Guardar", error);
     if (!datos) return null;
-    // si el backend rechaza, se reabre el modal con lo cargado y el motivo adentro
+
     try { const r = await accion(datos); toast("Guardado"); return r; }
     catch (e) { v = datos; error = e.message; }
   }
 }
 
-/* ---------------------------------------------------------------- tabla genérica */
 function tabla(cols, filas, acciones) {
   if (!filas.length) return `<div class="table-wrap"><div class="empty">Sin datos</div></div>`;
   return `<div class="table-wrap"><table><thead><tr>${cols.map((c) => `<th class="${c.num ? "num" : ""}">${esc(c.t)}</th>`).join("")}${acciones ? "<th></th>" : ""}</tr></thead><tbody>${filas
     .map((f, i) => `<tr>${cols.map((c) => `<td class="${c.num ? "num" : ""}${c.wrap ? " wrap" : ""}">${c.html ? c.html(f) : esc(f[c.k])}</td>`).join("")}${acciones ? `<td class="acc">${acciones(f, i)}</td>` : ""}</tr>`).join("")}</tbody></table></div>`;
 }
-// los ENUM de la base van sin tildes; acá se muestran bien escritos
+
 const ETIQUETAS = { inscripcion: "inscripción", sintetico: "sintético", "acumulacion de amarillas": "acumulación de amarillas" };
 const mostrar = (v) => ETIQUETAS[v] ?? v;
 const badge = (txt) => `<span class="badge b-${esc(String(txt).split(" ")[0])}">${esc(mostrar(txt))}</span>`;
 const fmtDia = (d) => (d ? new Date(d + "T12:00").toLocaleDateString("es-UY", { weekday: "short", day: "2-digit", month: "2-digit" }) : "");
 
-/* acciones con data-attrs: <button data-act="x" data-i="3"> */
 function bindAcciones(root, handlers) {
   root.onclick = (ev) => {
     const b = ev.target.closest("[data-act]");
@@ -146,9 +133,6 @@ function bindAcciones(root, handlers) {
   };
 }
 
-/* ====================================================================
-   VISTAS
-   ==================================================================== */
 const VISTAS = {
   partidos: { t: "Partidos", roles: ["administrador", "planillero"], render: vistaPartidos },
   equipos: { t: "Equipos y planteles", render: vistaEquipos },
@@ -170,7 +154,6 @@ function irA(nombre) {
   VISTAS[nombre].render(v).catch((e) => (v.innerHTML = `<p class="error">${esc(e.message)}</p>`));
 }
 
-/* ---------------------------------------------------------------- PARTIDOS */
 async function vistaPartidos(v, filtroFecha = "") {
   if (!state.torneo) { v.innerHTML = `<p class="muted">No hay ediciones creadas.</p>`; return; }
   const ps = await api(`/api/partidos?id_torneo=${state.torneo}`);
@@ -235,7 +218,6 @@ async function formPartido(p, fechaSugerida) {
   });
 }
 
-/* ---------------------------------------------------------------- PLANILLA */
 async function vistaPlanilla(v, id) {
   const d = await api(`/api/partidos/${id}/planilla`);
   const p = d.partido;
@@ -320,7 +302,6 @@ async function vistaPlanilla(v, id) {
   });
 }
 
-/* ---------------------------------------------------------------- EQUIPOS / PLANTEL */
 async function vistaEquipos(v) {
   const [equipos, facultades] = await Promise.all([api(`/api/equipos?id_torneo=${state.torneo}`), api("/api/facultades")]);
   const t = torneoActual();
@@ -399,7 +380,6 @@ async function vistaPlantel(v, id) {
   });
 }
 
-/* ---------------------------------------------------------------- JUGADORES */
 async function vistaJugadores(v, filtro = {}) {
   const fac = await api("/api/facultades");
   const qs = new URLSearchParams(Object.entries(filtro).filter(([, x]) => x)).toString();
@@ -432,7 +412,6 @@ async function vistaJugadores(v, filtro = {}) {
   });
 }
 
-/* ---------------------------------------------------------------- SANCIONES */
 async function vistaSanciones(v) {
   const ss = await api(`/api/sanciones?id_torneo=${state.torneo}`);
   v.innerHTML = `<h2>Sanciones · ${esc(torneoActual().nombre)}</h2>
@@ -464,7 +443,6 @@ async function vistaSanciones(v) {
   });
 }
 
-/* ---------------------------------------------------------------- REPORTES */
 async function vistaReportes(v, clave = "posiciones") {
   const lista = await api("/api/reportes");
   const r = await api(`/api/reportes/${clave}?id_torneo=${state.torneo}`);
@@ -475,7 +453,6 @@ async function vistaReportes(v, clave = "posiciones") {
   $("#r-sel", v).onchange = (e) => vistaReportes(v, e.target.value);
 }
 
-/* ---------------------------------------------------------------- TORNEOS */
 async function vistaTorneos(v) {
   const ts = await api("/api/torneos");
   v.innerHTML = `<h2>Ediciones del torneo</h2>
@@ -510,7 +487,6 @@ async function vistaTorneos(v) {
   });
 }
 
-/* ---------------------------------------------------------------- COMPLEJOS */
 async function vistaComplejos(v) {
   const [cs, deptos] = await Promise.all([api("/api/complejos"), api("/api/departamentos")]);
   v.innerHTML = `<h2>Complejos deportivos y canchas</h2>
@@ -539,7 +515,6 @@ async function vistaComplejos(v) {
   });
 }
 
-/* ---------------------------------------------------------------- FACULTADES */
 async function vistaFacultades(v) {
   const fs = await api("/api/facultades");
   v.innerHTML = `<h2>Facultades</h2><div class="toolbar"><span class="grow"></span><button class="btn primary" data-act="nueva">+ Nueva facultad</button></div>
@@ -553,7 +528,6 @@ async function vistaFacultades(v) {
   });
 }
 
-/* ---------------------------------------------------------------- USUARIOS */
 async function vistaUsuarios(v) {
   const us = await api("/api/usuarios");
   v.innerHTML = `<h2>Usuarios de la aplicación</h2><div class="toolbar"><span class="grow"></span><button class="btn primary" data-act="nuevo">+ Nuevo usuario</button></div>
@@ -568,9 +542,6 @@ async function vistaUsuarios(v) {
   });
 }
 
-/* ====================================================================
-   ARRANQUE / SESIÓN
-   ==================================================================== */
 async function cargarTorneos() {
   state.torneos = await api("/api/torneos");
   if (!state.torneos.some((t) => t.id_torneo === state.torneo)) {

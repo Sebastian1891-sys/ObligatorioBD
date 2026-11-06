@@ -1,4 +1,3 @@
-"""ABM de torneos (ediciones), equipos y planteles."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import reglas
@@ -7,23 +6,18 @@ from ..security import db_admin, db_usuario
 
 router = APIRouter(prefix="/api", tags=["torneos"])
 
-
-# ---------------------------------------------------------------- torneos
 TORNEO_SQL = """SELECT t.id_torneo, t.nombre, t.anio, t.semestre, t.fecha_inicio, t.fecha_fin, t.estado,
                        (SELECT COUNT(*) FROM equipo e WHERE e.id_torneo = t.id_torneo) AS equipos,
                        (SELECT COUNT(*) FROM partido p WHERE p.id_torneo = t.id_torneo) AS partidos
                   FROM torneo t"""
 
-
 @router.get("/torneos")
 def torneos(db=Depends(db_usuario)):
     return db.all(TORNEO_SQL + " ORDER BY t.anio DESC, t.semestre DESC")
 
-
 @router.get("/torneos/{id_torneo}")
 def torneo(id_torneo: int, db=Depends(db_usuario)):
     return db.one_or_404(TORNEO_SQL + " WHERE t.id_torneo = %s", (id_torneo,), "Torneo")
-
 
 @router.post("/torneos", status_code=201)
 def crear_torneo(data: TorneoIn, db=Depends(db_admin)):
@@ -31,7 +25,6 @@ def crear_torneo(data: TorneoIn, db=Depends(db_admin)):
                   VALUES (%s, %s, %s, %s, %s, 'inscripcion')""",
                (data.nombre, data.anio, data.semestre, data.fecha_inicio, data.fecha_fin))
     return db.one(TORNEO_SQL + " WHERE t.id_torneo = %s", (db.lastrowid,))
-
 
 @router.put("/torneos/{id_torneo}")
 def editar_torneo(id_torneo: int, data: TorneoIn, db=Depends(db_admin)):
@@ -45,13 +38,11 @@ def editar_torneo(id_torneo: int, data: TorneoIn, db=Depends(db_admin)):
                (data.nombre, data.anio, data.semestre, data.fecha_inicio, data.fecha_fin, id_torneo))
     return db.one(TORNEO_SQL + " WHERE t.id_torneo = %s", (id_torneo,))
 
-
 @router.patch("/torneos/{id_torneo}/estado")
 def cambiar_estado_torneo(id_torneo: int, data: TorneoEstado, db=Depends(db_admin)):
     reglas.validar_cambio_estado_torneo(db, id_torneo, data.estado)
     db.execute("UPDATE torneo SET estado = %s WHERE id_torneo = %s", (data.estado, id_torneo))
     return db.one(TORNEO_SQL + " WHERE t.id_torneo = %s", (id_torneo,))
-
 
 @router.delete("/torneos/{id_torneo}", status_code=204)
 def borrar_torneo(id_torneo: int, db=Depends(db_admin)):
@@ -62,8 +53,6 @@ def borrar_torneo(id_torneo: int, db=Depends(db_admin)):
         raise HTTPException(409, "La edición tiene equipos inscriptos: eliminalos primero")
     db.execute("DELETE FROM torneo WHERE id_torneo = %s", (id_torneo,))
 
-
-# ---------------------------------------------------------------- equipos
 EQUIPO_SQL = """SELECT e.id_equipo, e.nombre, e.id_torneo, t.nombre AS torneo, t.estado AS estado_torneo,
                        e.id_facultad, f.nombre AS facultad, e.ci_capitan,
                        CONCAT(c.nombre, ' ', c.apellido) AS capitan,
@@ -72,7 +61,6 @@ EQUIPO_SQL = """SELECT e.id_equipo, e.nombre, e.id_torneo, t.nombre AS torneo, t
                   JOIN torneo t   ON t.id_torneo = e.id_torneo
                   JOIN facultad f ON f.id_facultad = e.id_facultad
                   LEFT JOIN jugador c ON c.ci = e.ci_capitan"""
-
 
 def _equipo_con_plantel(db, id_equipo):
     e = db.one_or_404(EQUIPO_SQL + " WHERE e.id_equipo = %s", (id_equipo,), "Equipo")
@@ -83,18 +71,15 @@ def _equipo_con_plantel(db, id_equipo):
                           (e["ci_capitan"], id_equipo))
     return e
 
-
 @router.get("/equipos")
 def equipos(id_torneo: int | None = None, db=Depends(db_usuario)):
     if id_torneo:
         return db.all(EQUIPO_SQL + " WHERE e.id_torneo = %s ORDER BY e.nombre", (id_torneo,))
     return db.all(EQUIPO_SQL + " ORDER BY t.anio DESC, t.semestre DESC, e.nombre")
 
-
 @router.get("/equipos/{id_equipo}")
 def equipo(id_equipo: int, db=Depends(db_usuario)):
     return _equipo_con_plantel(db, id_equipo)
-
 
 @router.post("/equipos", status_code=201)
 def crear_equipo(data: EquipoIn, db=Depends(db_admin)):
@@ -103,14 +88,12 @@ def crear_equipo(data: EquipoIn, db=Depends(db_admin)):
                (data.nombre, data.id_torneo, data.id_facultad))
     return _equipo_con_plantel(db, db.lastrowid)
 
-
 @router.put("/equipos/{id_equipo}")
 def editar_equipo(id_equipo: int, data: EquipoUpdate, db=Depends(db_admin)):
     reglas.validar_edicion_equipo(db, id_equipo, data.id_facultad, data.ci_capitan)
     db.execute("UPDATE equipo SET nombre=%s, id_facultad=%s, ci_capitan=%s WHERE id_equipo=%s",
                (data.nombre, data.id_facultad, data.ci_capitan or None, id_equipo))
     return _equipo_con_plantel(db, id_equipo)
-
 
 @router.delete("/equipos/{id_equipo}", status_code=204)
 def borrar_equipo(id_equipo: int, db=Depends(db_admin)):
@@ -122,18 +105,15 @@ def borrar_equipo(id_equipo: int, db=Depends(db_admin)):
     db.execute("UPDATE equipo SET ci_capitan = NULL WHERE id_equipo = %s", (id_equipo,))
     db.execute("DELETE FROM equipo WHERE id_equipo = %s", (id_equipo,))
 
-
-# ---------------------------------------------------------------- plantel
 @router.get("/equipos/{id_equipo}/disponibles")
 def jugadores_disponibles(id_equipo: int, db=Depends(db_usuario)):
-    """Jugadores de la facultad del equipo que todavía no integran ningún equipo de la edición."""
+
     e = db.one_or_404("SELECT id_torneo, id_facultad FROM equipo WHERE id_equipo = %s", (id_equipo,), "Equipo")
     return db.all("""SELECT j.ci, j.nombre, j.apellido, j.tipo FROM jugador j
                       WHERE j.id_facultad = %s
                         AND NOT EXISTS (SELECT 1 FROM equipo_jugador_torneo x
                                          WHERE x.ci_jugador = j.ci AND x.id_torneo = %s)
                       ORDER BY j.apellido, j.nombre""", (e["id_facultad"], e["id_torneo"]))
-
 
 @router.post("/equipos/{id_equipo}/plantel", status_code=201)
 def agregar_al_plantel(id_equipo: int, data: PlantelIn, db=Depends(db_admin)):
@@ -143,7 +123,6 @@ def agregar_al_plantel(id_equipo: int, data: PlantelIn, db=Depends(db_admin)):
                   VALUES (%s, %s, %s, %s)""", (id_equipo, data.ci_jugador, e["id_torneo"], data.numero_camiseta))
     return _equipo_con_plantel(db, id_equipo)
 
-
 @router.put("/equipos/{id_equipo}/plantel/{ci}")
 def cambiar_camiseta(id_equipo: int, ci: str, data: CamisetaIn, db=Depends(db_admin)):
     reglas.validar_cambio_plantel(db, id_equipo)
@@ -152,7 +131,6 @@ def cambiar_camiseta(id_equipo: int, ci: str, data: CamisetaIn, db=Depends(db_ad
             "SELECT 1 FROM equipo_jugador_torneo WHERE id_equipo = %s AND ci_jugador = %s", (id_equipo, ci)):
         raise HTTPException(404, "El jugador no está en el plantel")
     return _equipo_con_plantel(db, id_equipo)
-
 
 @router.delete("/equipos/{id_equipo}/plantel/{ci}")
 def quitar_del_plantel(id_equipo: int, ci: str, db=Depends(db_admin)):

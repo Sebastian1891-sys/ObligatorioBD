@@ -21,7 +21,6 @@ body { margin: 0; background: var(--bg); min-height: 100vh; }
 .mono { font-family: "JetBrains Mono", monospace; font-size: .92em; }
 .error { color: var(--red); min-height: 1.2em; margin: .4rem 0 0; font-size: .92rem; }
 
-/* marca */
 .brand { font-weight: 800; letter-spacing: -.02em; display: flex; align-items: center; gap: .55rem; font-size: 1.1rem; }
 .brand b { background: var(--lime); padding: 0 .35rem; border-radius: 4px; }
 .brand.big { font-size: 1.5rem; }
@@ -29,13 +28,11 @@ body { margin: 0; background: var(--bg); min-height: 100vh; }
   radial-gradient(circle at 50% 50%, var(--ink) 0 3px, transparent 3.5px),
   radial-gradient(circle at 50% 50%, #fff 0 9px); border: 2px solid var(--ink); }
 
-/* login */
 .login { min-height: 100vh; display: grid; place-items: center; padding: 16px;
   background: repeating-linear-gradient(90deg, #1f6b45 0 60px, #237a4f 60px 120px); }
 .login-card { background: var(--panel); padding: 2rem; border-radius: 14px; width: min(400px, 100%);
   display: grid; gap: .9rem; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
 
-/* layout */
 .top { display: flex; align-items: center; gap: 1.2rem; padding: .7rem 1.4rem; background: var(--ink); color: #fff; flex-wrap: wrap; }
 .top .brand b { color: var(--ink); }
 .torneo-sel { display: flex; align-items: center; gap: .5rem; font-size: .85rem; color: #c8d0cb; }
@@ -47,7 +44,6 @@ body { margin: 0; background: var(--bg); min-height: 100vh; }
 .nav button.active { color: var(--ink); border-color: var(--green); }
 .view { padding: 1.4rem; max-width: 1440px; margin: 0 auto; }
 
-/* elementos */
 h2 { margin: 0 0 1rem; letter-spacing: -.02em; }
 h3 { margin: 0 0 .8rem; }
 .toolbar { display: flex; gap: .6rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -87,7 +83,6 @@ td.acc .btn { margin-left: .25rem; }
 .card-y { background: var(--yellow); } .card-r { background: var(--red); }
 .score { font-family: "JetBrains Mono", monospace; font-weight: 600; background: var(--ink); color: #fff; padding: .1rem .45rem; border-radius: 5px; }
 
-/* planilla */
 .marcador { display: flex; align-items: center; justify-content: center; gap: 1.4rem; padding: 1rem; background: var(--ink); color: #fff; border-radius: var(--radius); margin-bottom: 1rem; flex-wrap: wrap; text-align: center; }
 .marcador .eq { font-weight: 800; font-size: 1.15rem; min-width: 160px; }
 .marcador .res { font-family: "JetBrains Mono", monospace; font-size: 2rem; background: var(--lime); color: var(--ink); padding: .1rem .8rem; border-radius: 8px; }
@@ -102,7 +97,6 @@ td.acc .btn { margin-left: .25rem; }
 .aviso.ok { background: var(--green-2); color: var(--green); }
 .aviso.warn { background: #fbf0d4; color: #7a5a0e; }
 
-/* modal */
 dialog { border: 0; border-radius: 14px; padding: 0; width: min(560px, calc(100% - 32px)); box-shadow: 0 25px 60px rgba(0,0,0,.3); }
 dialog::backdrop { background: rgba(20,33,27,.45); }
 dialog form { padding: 1.4rem; display: grid; gap: .8rem; }
