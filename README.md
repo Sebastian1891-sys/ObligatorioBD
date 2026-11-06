@@ -2,8 +2,8 @@
 
 Sistema de gestión del Torneo Interfacultades de Fútbol 5 (Base de Datos 1 – UCU, 2º semestre 2026).
 
-- **Base de datos:** MySQL 8 — reglas de negocio en `CHECK`, claves foráneas compuestas, índices únicos y triggers.
-- **Backend:** Python 3.12 + FastAPI + PyMySQL, **SQL escrito a mano, sin ORM**.
+- **Base de datos:** MySQL 8 — validación de campos e integridad con `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `NOT NULL` y `CHECK`; vistas para calcular resultados.
+- **Backend:** Python 3.12 + FastAPI + PyMySQL, **SQL escrito a mano, sin ORM**. Las reglas del torneo están en `backend/app/reglas.py`.
 - **Frontend:** HTML + CSS + JavaScript sin frameworks, servido por el mismo backend.
 - **Seguridad en la BD:** un usuario de MySQL por rol (`torneo_admin`, `torneo_planillero`, `torneo_auth`) con permisos diferenciados.
 - **Docker Compose** con los servicios `db` y `app`.
@@ -13,14 +13,14 @@ Sistema de gestión del Torneo Interfacultades de Fútbol 5 (Base de Datos 1 –
 ├── script_completo.sql          ← los 4 scripts de base_de_datos/ concatenados (para correr de una)
 ├── base_de_datos/
 │   ├── esquema.sql              tablas, PK/FK, CHECK, índices únicos
-│   ├── logica.sql               funciones, procedimientos, triggers y vistas
+│   ├── logica.sql               vistas (resultados y tabla de posiciones)
 │   ├── usuarios.sql             usuarios de BD con permisos por rol
 │   ├── datos.sql                datos maestros y de prueba (generado)
 │   ├── tools/generar_datos.py   genera datos.sql simulando el torneo
 │   └── demo/                    script para la defensa
-├── backend/                     API FastAPI (app/) + Dockerfile
+├── backend/                     API FastAPI (app/, reglas en app/reglas.py) + Dockerfile
 ├── frontend/                    SPA (index.html, app.js, styles.css)
-├── docs/informe.md              informe del trabajo
+├── docs/                        informe del trabajo (INFORME.pdf / informe.docx)
 └── docker-compose.yml
 ```
 
@@ -74,8 +74,7 @@ Requisitos: MySQL 8.0+ y Python 3.10+.
    mysql -uroot -p < base_de_datos/usuarios.sql
    mysql -uroot -p < base_de_datos/datos.sql
    ```
-   > `datos.sql` debe ejecutarse como **root**: carga partidos de semanas pasadas y para eso
-   > habilita una excepción a la regla de 48 h que solo vale para root (ver informe).
+   > Ejecutarlos como **root**: `usuarios.sql` crea los usuarios de base de datos de la aplicación.
 
 2. **Backend:**
 

@@ -63,12 +63,12 @@ const VALIDADORES = {
 
 /* ---------------------------------------------------------------- modal genérico de formulario
    campos: [{name, label, type, required, options:[[value,label]], min, max, pattern, value, validar, hint}] */
-function formModal(titulo, campos, valores = {}, okText = "Guardar") {
+function formModal(titulo, campos, valores = {}, okText = "Guardar", error = "") {
   return new Promise((resolve) => {
     const dlg = $("#modal"), body = $("#modal-body"), form = $("#modal-form");
     $("#modal-title").textContent = titulo;
     $("#modal-ok").textContent = okText;
-    $("#modal-error").textContent = "";
+    $("#modal-error").textContent = error;   // error del backend del intento anterior
     form.classList.remove("validado");
     body.innerHTML = campos.map((c) => {
       const v = valores[c.name] ?? c.value ?? "";
@@ -116,12 +116,13 @@ const confirmar = (msg) => formModal(msg, [], {}, "Confirmar").then((r) => r !==
 
 /* guarda con el modal y reabre si el backend rechaza (muestra el error) */
 async function guardarConModal(titulo, campos, valores, accion) {
-  let v = valores;
+  let v = valores, error = "";
   while (true) {
-    const datos = await formModal(titulo, campos, v);
+    const datos = await formModal(titulo, campos, v, "Guardar", error);
     if (!datos) return null;
+    // si el backend rechaza, se reabre el modal con lo cargado y el motivo adentro
     try { const r = await accion(datos); toast("Guardado"); return r; }
-    catch (e) { toast(e.message, true); v = datos; }
+    catch (e) { v = datos; error = e.message; }
   }
 }
 
