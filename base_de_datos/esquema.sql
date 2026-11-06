@@ -2,6 +2,11 @@
 --  Torneo Interfacultades de Fútbol 5 – UCU
 --  esquema.sql : creación de la base y de todas las tablas
 --  MySQL 8.0+
+--
+--  En la base quedan las validaciones de campos y de integridad:
+--  PRIMARY KEY, FOREIGN KEY, UNIQUE, NOT NULL y CHECK.
+--  Las reglas del torneo (cupos del plantel, 48 h, sanciones, etc.)
+--  se validan en el backend, en backend/app/reglas.py.
 -- =====================================================================
 
 DROP DATABASE IF EXISTS torneo_ucu;
@@ -16,7 +21,7 @@ CREATE TABLE login (
     contrasena  VARCHAR(100) NOT NULL COMMENT 'hash bcrypt, nunca texto plano',
     rol         ENUM('administrador','planillero') NOT NULL,
     PRIMARY KEY (correo),
-    CONSTRAINT chk_login_correo CHECK (correo REGEXP '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$'),
+    CONSTRAINT chk_login_correo CHECK (correo LIKE '%_@_%._%'),
     CONSTRAINT chk_login_hash   CHECK (CHAR_LENGTH(contrasena) >= 50)
 );
 
@@ -42,9 +47,9 @@ CREATE TABLE jugador (
     PRIMARY KEY (ci),
     UNIQUE KEY uq_jugador_email (email),
     CONSTRAINT fk_jugador_facultad FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
-    CONSTRAINT chk_jugador_ci     CHECK (ci REGEXP '^[0-9]{7,8}$'),
+    CONSTRAINT chk_jugador_ci     CHECK (CHAR_LENGTH(ci) IN (7, 8)),
     CONSTRAINT chk_jugador_nombre CHECK (CHAR_LENGTH(TRIM(nombre)) >= 2 AND CHAR_LENGTH(TRIM(apellido)) >= 2),
-    CONSTRAINT chk_jugador_email  CHECK (email REGEXP '^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$'),
+    CONSTRAINT chk_jugador_email  CHECK (email LIKE '%_@_%._%'),
     CONSTRAINT chk_jugador_nac    CHECK (fecha_nacimiento >= '1930-01-01')
 );
 
@@ -126,8 +131,7 @@ CREATE TABLE turno (
     PRIMARY KEY (id_turno),
     UNIQUE KEY uq_turno_inicio (hora_inicio),
     CONSTRAINT chk_turno_rango  CHECK (hora_inicio >= '18:00:00' AND hora_fin <= '23:00:00'),
-    CONSTRAINT chk_turno_1h     CHECK (TIMEDIFF(hora_fin, hora_inicio) = '01:00:00'),
-    CONSTRAINT chk_turno_enpunto CHECK (MINUTE(hora_inicio) = 0 AND SECOND(hora_inicio) = 0)
+    CONSTRAINT chk_turno_1h     CHECK (hora_fin = ADDTIME(hora_inicio, '01:00:00'))
 );
 
 -- ---------------------------------------------------------------------
@@ -145,19 +149,9 @@ CREATE TABLE partido (
     id_complejo         INT NOT NULL,
     estado              ENUM('programado','jugado','postergado','cancelado') NOT NULL DEFAULT 'programado',
     jugado_en           DATETIME NULL COMMENT 'momento en que se marcó como jugado',
-
-    -- columnas generadas para que índices UNIQUE ignoren partidos que no ocupan lugar
-    ocupa_cancha  TINYINT GENERATED ALWAYS AS (IF(estado IN ('programado','jugado'), 1, NULL)) STORED,
-    par_activo    TINYINT GENERATED ALWAYS AS (IF(estado <> 'cancelado', 1, NULL)) STORED,
-    equipo_menor  INT GENERATED ALWAYS AS (LEAST(id_equipo_local, id_equipo_visitante)) STORED,
-    equipo_mayor  INT GENERATED ALWAYS AS (GREATEST(id_equipo_local, id_equipo_visitante)) STORED,
-
+    -- las reglas "cancha libre", "no repetir rival" y "un partido por fecha"
+    -- las controla el backend (backend/app/reglas.py) antes de guardar
     PRIMARY KEY (id_partido),
-    UNIQUE KEY uq_partido_torneo (id_partido, id_torneo),
-    -- una cancha no puede tener dos partidos en el mismo día y turno
-    UNIQUE KEY uq_cancha_dia_turno (id_complejo, nombre_cancha, dia, id_turno, ocupa_cancha),
-    -- un par de equipos se enfrenta una sola vez por edición (salvo partidos cancelados)
-    UNIQUE KEY uq_enfrentamiento (id_torneo, equipo_menor, equipo_mayor, par_activo),
     KEY ix_partido_fecha (id_torneo, numero_fecha),
 
     CONSTRAINT fk_partido_torneo    FOREIGN KEY (id_torneo) REFERENCES torneo(id_torneo),

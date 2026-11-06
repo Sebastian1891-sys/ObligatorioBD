@@ -24,7 +24,7 @@ CREATE USER 'torneo_planillero'@'%' IDENTIFIED BY 'Planillero_Torneo_2026!';
 GRANT SELECT ON torneo_ucu.login TO 'torneo_auth'@'%';
 
 -- administrador: CRUD sobre todo el esquema (no puede crear/borrar tablas ni usuarios de BD)
-GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE, SHOW VIEW ON torneo_ucu.* TO 'torneo_admin'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.* TO 'torneo_admin'@'%';
 
 -- planillero: lectura de lo necesario para ver partidos y planteles
 GRANT SELECT ON torneo_ucu.facultad              TO 'torneo_planillero'@'%';
@@ -35,16 +35,17 @@ GRANT SELECT ON torneo_ucu.equipo_jugador_torneo TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.complejo              TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.cancha                TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.turno                 TO 'torneo_planillero'@'%';
-GRANT SELECT ON torneo_ucu.sancion_jugador       TO 'torneo_planillero'@'%';
+-- sanciones: el backend recalcula las automáticas (roja / 3 amarillas) cuando
+-- el planillero carga o borra una tarjeta, así que necesita escribirlas
+GRANT SELECT, INSERT, DELETE ON torneo_ucu.sancion_jugador TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_partido             TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado           TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado_equipo    TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_tabla_posiciones    TO 'torneo_planillero'@'%';
-GRANT EXECUTE ON FUNCTION torneo_ucu.fn_jugador_suspendido TO 'torneo_planillero'@'%';
 
--- partido: puede leerlo y cambiar ÚNICAMENTE la columna estado (marcar jugado)
+-- partido: puede leerlo y cambiar ÚNICAMENTE el estado (marcar jugado) y cuándo se jugó
 GRANT SELECT ON torneo_ucu.partido TO 'torneo_planillero'@'%';
-GRANT UPDATE (estado) ON torneo_ucu.partido TO 'torneo_planillero'@'%';
+GRANT UPDATE (estado, jugado_en) ON torneo_ucu.partido TO 'torneo_planillero'@'%';
 
 -- lo que sí registra
 GRANT SELECT, INSERT, DELETE         ON torneo_ucu.planilla_partido TO 'torneo_planillero'@'%';

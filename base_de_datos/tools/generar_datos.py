@@ -1,10 +1,11 @@
 """
 Genera base_de_datos/datos.sql con datos de prueba coherentes.
 
-Simula el torneo fecha por fecha respetando las mismas reglas que la base
-(suspensiones por roja, por acumulación de 3 amarillas y disciplinarias), para
-que todas las inserciones pasen los triggers. Es determinístico (semilla fija),
-así que regenerarlo da siempre el mismo archivo.
+Simula el torneo fecha por fecha respetando las mismas reglas que la aplicación
+(suspensiones por roja, por acumulación de 3 amarillas y disciplinarias): un
+jugador suspendido no entra en la planilla y las sanciones automáticas se
+insertan junto con la tarjeta que las genera. Usa semilla fija, así que
+regenerarlo da siempre los mismos datos (cambian solo los hashes de bcrypt).
 
     python base_de_datos/tools/generar_datos.py
 """
@@ -52,7 +53,7 @@ w("-- =====================================================================\n"
   "--  más una edición 2027-S1 en inscripción.\n"
   "-- =====================================================================\n"
   "USE torneo_ucu;\n"
-  "SET @carga_datos = 1;  -- habilita cargar planillas históricas (solo root)\n\n")
+  "\n")
 
 # ---------------------------------------------------------------- login
 usuarios = [
@@ -189,6 +190,7 @@ for f in range(1, 6):
 
 # ---------------------------------------------------------------- simulación
 sanciones = []   # (ci, desde, cant)
+id_tarjeta = 0   # ids explícitos para poder referenciarlos desde las sanciones
 amarillas_acum = {}
 
 
@@ -253,17 +255,27 @@ for f in range(1, 6):
             if amarillas_acum.get(ci, 0) == 0 and all(t[1] != ci for t in tarjetas):
                 tarjetas.append((p["id"], ci, R.randint(5, 50), "amarilla"))
         tarjetas.sort(key=lambda t: t[2])
-        w(ins("tarjeta", ["id_partido", "ci_jugador", "minuto", "color"], tarjetas))
-        for _, ci, _, color in tarjetas:
+        filas_t = []
+        nuevas_sanciones = []
+        for _, ci, minuto, color in tarjetas:
+            id_tarjeta += 1
+            filas_t.append((id_tarjeta, p["id"], ci, minuto, color))
+            # misma regla que backend/app/reglas.py: roja o cada 3 amarillas = 1 fecha
             if color == "roja":
+                nuevas_sanciones.append((ci, 1, "roja", f + 1, 1, id_tarjeta))
                 sanciones.append((ci, f + 1, 1))
             else:
                 amarillas_acum[ci] = amarillas_acum.get(ci, 0) + 1
                 if amarillas_acum[ci] % 3 == 0:
+                    nuevas_sanciones.append((ci, 1, "acumulacion de amarillas", f + 1, 1, id_tarjeta))
                     sanciones.append((ci, f + 1, 1))
+        w(ins("tarjeta", ["id_tarjeta", "id_partido", "ci_jugador", "minuto", "color"], filas_t))
+        if nuevas_sanciones:
+            w("-- sanciones automáticas que generan estas tarjetas\n")
+            w(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "id_tarjeta"],
+                  nuevas_sanciones))
 
-        w(f"UPDATE partido SET estado = 'jugado' WHERE id_partido = {p['id']};\n")
+        w(f"UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = {p['id']};\n")
 
-w("\nSET @carga_datos = NULL;\n")
 OUT.write_text("".join(sql), encoding="utf-8")
 print("escrito", OUT)
