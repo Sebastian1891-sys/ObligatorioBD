@@ -8,7 +8,6 @@ Acceso a datos SIN ORM: PyMySQL + SQL parametrizado.
 - Los errores de MySQL se traducen a respuestas HTTP con mensajes legibles.
 """
 import datetime as dt
-import re
 from contextlib import contextmanager
 from decimal import Decimal
 
@@ -20,6 +19,7 @@ from . import config
 # Mensajes para los CHECK del esquema
 CHECK_MSG = {
     "chk_jugador_ci": "La cédula debe tener 7 u 8 dígitos, sin puntos ni guion",
+    "chk_turno_1h": "Cada turno dura exactamente una hora",
     "chk_jugador_email": "El email del jugador no es válido",
     "chk_jugador_nombre": "Nombre y apellido deben tener al menos 2 caracteres",
     "chk_jugador_nac": "Fecha de nacimiento inválida",
@@ -49,8 +49,6 @@ UNIQUE_MSG = {
     "uq_jugador_un_equipo_por_torneo": "El jugador ya integra otro equipo en esta edición",
     "uq_camiseta_por_equipo": "Ese número de camiseta ya está usado en el equipo",
     "uq_complejo_nombre": "Ya existe un complejo con ese nombre",
-    "uq_cancha_dia_turno": "La cancha ya tiene un partido asignado en ese día y turno",
-    "uq_enfrentamiento": "Esos equipos ya tienen un partido en esta edición",
     "uq_turno_inicio": "Ya existe un turno con esa hora",
 }
 
@@ -65,22 +63,29 @@ def _connect(rol: str):
     )
 
 
+def _buscar_mensaje(texto_error: str, mensajes: dict, por_defecto: str) -> str:
+    """MySQL incluye el nombre de la restricción en el texto del error
+    (por ejemplo "Duplicate entry ... for key 'equipo.uq_equipo_nombre_torneo'").
+    Se busca cuál de nuestras restricciones aparece y se devuelve su mensaje."""
+    for nombre, mensaje in mensajes.items():
+        if f"'{nombre}'" in texto_error or f".{nombre}'" in texto_error:
+            return mensaje
+    return por_defecto
+
+
 def traducir_error(e: pymysql.MySQLError) -> HTTPException:
+    """Convierte un error de MySQL en una respuesta HTTP con un mensaje entendible."""
     code = e.args[0] if e.args else 0
     msg = str(e.args[1]) if len(e.args) > 1 else str(e)
-    if code == 1644:                                   # SIGNAL de un trigger: regla de negocio
-        return HTTPException(400, msg)
-    if code == 1062:                                   # duplicado
-        m = re.search(r"for key '(?:[\w]+\.)?([\w]+)'", msg)
-        return HTTPException(409, UNIQUE_MSG.get(m.group(1) if m else "", "Registro duplicado"))
-    if code == 3819:                                   # CHECK
-        m = re.search(r"Check constraint '([\w]+)'", msg)
-        return HTTPException(400, CHECK_MSG.get(m.group(1) if m else "", "Dato inválido"))
-    if code in (1451, 1217):
+    if code == 1062:                                   # se violó un UNIQUE o la PRIMARY KEY
+        return HTTPException(409, _buscar_mensaje(msg, UNIQUE_MSG, "Registro duplicado"))
+    if code == 3819:                                   # se violó un CHECK
+        return HTTPException(400, _buscar_mensaje(msg, CHECK_MSG, "Dato inválido"))
+    if code in (1451, 1217):                           # FK: hay filas que dependen de esta
         return HTTPException(409, "No se puede eliminar o modificar: tiene registros asociados")
-    if code == 1452:
+    if code == 1452:                                   # FK: el dato referenciado no existe
         return HTTPException(400, "Referencia inválida: alguno de los datos relacionados no existe")
-    if code in (1142, 1143, 1370):
+    if code in (1142, 1143, 1370):                     # GRANT: el usuario de BD del rol no tiene permiso
         return HTTPException(403, "Tu rol no tiene permiso para esta operación (rechazado por la base de datos)")
     if code in (1048, 1364):
         return HTTPException(400, "Falta un dato obligatorio")
@@ -92,6 +97,7 @@ def traducir_error(e: pymysql.MySQLError) -> HTTPException:
 
 
 def _limpiar(v):
+    """Pasa los tipos de MySQL a valores que se pueden mandar como JSON."""
     if isinstance(v, dt.timedelta):                    # columnas TIME
         s = int(v.total_seconds())
         return f"{s // 3600:02d}:{s % 3600 // 60:02d}"
@@ -105,23 +111,28 @@ def _limpiar(v):
 
 
 class Cursor:
-    """Envoltorio fino sobre el cursor de PyMySQL con helpers de lectura."""
+    """Cursor de PyMySQL con cuatro atajos para no repetir código en los endpoints.
+    En todos, `params` son los valores que reemplazan a los %s del SQL."""
 
     def __init__(self, cur):
         self._cur = cur
 
     def execute(self, sql, params=None) -> int:
+        """INSERT / UPDATE / DELETE. Devuelve cuántas filas se afectaron."""
         return self._cur.execute(sql, params)
 
     def all(self, sql, params=None) -> list[dict]:
+        """SELECT que devuelve todas las filas, cada una como diccionario {columna: valor}."""
         self._cur.execute(sql, params)
         return [{k: _limpiar(v) for k, v in r.items()} for r in self._cur.fetchall()]
 
     def one(self, sql, params=None) -> dict | None:
+        """SELECT que devuelve la primera fila, o None si no hay ninguna."""
         rows = self.all(sql, params)
         return rows[0] if rows else None
 
     def one_or_404(self, sql, params=None, que="Registro") -> dict:
+        """Como one(), pero si no hay fila responde 404 '<que> no encontrado'."""
         r = self.one(sql, params)
         if r is None:
             raise HTTPException(404, f"{que} no encontrado")
@@ -129,16 +140,16 @@ class Cursor:
 
     @property
     def lastrowid(self):
+        """id AUTO_INCREMENT generado por el último INSERT."""
         return self._cur.lastrowid
-
-    @property
-    def rowcount(self):
-        return self._cur.rowcount
 
 
 @contextmanager
 def transaccion(rol: str):
-    """Abre conexión con el usuario del rol, hace commit al final o rollback si algo falla."""
+    """Un request = una transacción.
+    Abre la conexión con el usuario de BD del rol, deja usar el cursor, y al
+    terminar hace COMMIT. Si algo falla (una regla, un error de MySQL), hace
+    ROLLBACK y no queda nada guardado a medias."""
     try:
         conn = _connect(rol)
     except pymysql.MySQLError as e:

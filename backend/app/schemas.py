@@ -1,6 +1,8 @@
 """
-Modelos Pydantic: validación de entrada en la capa backend (la base vuelve a
-validar con CHECK/FK/triggers; el frontend valida con atributos HTML y JS).
+Modelos Pydantic: validación de los campos que llegan al backend (tipos,
+largos, rangos, formato de cédula y email). Las reglas del torneo están en
+reglas.py; la base vuelve a validar con CHECK, FK, UNIQUE y NOT NULL, y el
+frontend valida con atributos HTML y JS.
 """
 import datetime as dt
 from typing import Literal
