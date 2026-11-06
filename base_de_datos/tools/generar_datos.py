@@ -18,44 +18,52 @@ def q(v):
 def digito_verificador(base7):
 
     d = f"{base7:07d}"
-    s = sum(int(x) * w for x, w in zip(d, (2, 9, 8, 7, 6, 3, 4)))
+    pesos = [2, 9, 8, 7, 6, 3, 4]
+    s = 0
+    for i in range(7):
+        s += int(d[i]) * pesos[i]
     return str((10 - s % 10) % 10)
 
 def ins(table, cols, rows):
     if not rows:
         return ""
-    vals = ",\n  ".join("(" + ", ".join(q(v) for v in r) + ")" for r in rows)
+    filas_sql = []
+    for fila in rows:
+        valores = []
+        for valor in fila:
+            valores.append(q(valor))
+        filas_sql.append("(" + ", ".join(valores) + ")")
+    vals = ",\n  ".join(filas_sql)
     return f"INSERT INTO {table} ({', '.join(cols)}) VALUES\n  {vals};\n"
 
 sql = []
-w = sql.append
 
-w("\n"
-  "\n"
-  "\n"
-  "\n"
-  "\n"
-  "\n"
-  "\n"
-  "USE torneo_ucu;\n"
-  "\n")
+sql.append("USE torneo_ucu;\n\n")
 
 usuarios = [
     ("admin@ucu.edu.uy", "admin123", "administrador"),
     ("planillero@ucu.edu.uy", "planillero123", "planillero"),
     ("planillero2@ucu.edu.uy", "planillero123", "planillero"),
 ]
-w("\n")
-w("\n")
-w(ins("login", ["correo", "contrasena", "rol"],
-      [(c, bcrypt.hashpw(p.encode(), bcrypt.gensalt(rounds=10)).decode(), r) for c, p, r in usuarios]))
+sql.append("\n")
+sql.append("\n")
+filas = []
+for correo, contrasena, rol in usuarios:
+    protegida = bcrypt.hashpw(contrasena.encode(), bcrypt.gensalt(rounds=10)).decode()
+    filas.append((correo, protegida, rol))
+sql.append(ins("login", ["correo", "contrasena", "rol"], filas))
 
 facultades = ["Ingeniería y Tecnologías", "Ciencias Empresariales", "Derecho",
               "Ciencias de la Salud", "Ciencias Humanas", "Psicología", "Odontología"]
-w("\n" + ins("facultad", ["id_facultad", "nombre"], [(i + 1, n) for i, n in enumerate(facultades)]))
+filas = []
+for i, nombre in enumerate(facultades):
+    filas.append((i + 1, nombre))
+sql.append(ins("facultad", ["id_facultad", "nombre"], filas))
 
-w("\n" + ins("turno", ["id_turno", "hora_inicio", "hora_fin"],
-             [(i + 1, f"{18 + i}:00:00", f"{19 + i}:00:00") for i in range(5)]))
+filas = []
+for i in range(5):
+    filas.append((i + 1, f"{18 + i}:00:00", f"{19 + i}:00:00"))
+sql.append(ins("turno", ["id_turno", "hora_inicio", "hora_fin"], filas))
 
 complejos = [
     (1, "Complejo Fútbol 5 Buceo", "Av. Rivera 3450", "Montevideo"),
@@ -67,8 +75,8 @@ canchas = [
     ("Central", 2, "parquet", True), ("Anexo", 2, "sintetico", False),
     ("Cancha A", 3, "sintetico", False),
 ]
-w("\n" + ins("complejo", ["id_complejo", "nombre", "direccion", "departamento"], complejos))
-w(ins("cancha", ["nombre_cancha", "id_complejo", "superficie", "techada"], canchas))
+sql.append("\n" + ins("complejo", ["id_complejo", "nombre", "direccion", "departamento"], complejos))
+sql.append(ins("cancha", ["nombre_cancha", "id_complejo", "superficie", "techada"], canchas))
 
 nombres = ["Mateo", "Santiago", "Joaquín", "Bruno", "Facundo", "Nicolás", "Agustín", "Martín",
            "Federico", "Gonzalo", "Diego", "Lucas", "Tomás", "Rodrigo", "Ignacio", "Pablo",
@@ -101,24 +109,30 @@ for fid in range(1, len(facultades) + 1):
         while email in used_emails:
             email = email.replace("@", f"{i}@", 1); i += 1
         used_emails.add(email)
-        anio = R.randint(1972, 1990) if tipo in ("docente", "funcionario") else (
-            R.randint(1994, 2001) if tipo == "posgrado" else R.randint(2002, 2007))
+        if tipo in ("docente", "funcionario"):
+            anio = R.randint(1972, 1990)
+        elif tipo == "posgrado":
+            anio = R.randint(1994, 2001)
+        else:
+            anio = R.randint(2002, 2007)
         nac = f"{anio}-{R.randint(1, 12):02d}-{R.randint(1, 28):02d}"
         jugadores.append((ci, nom, ape, email, nac, fid, tipo))
         lst.append(ci)
     por_facultad[fid] = lst
-w("\n" + ins("jugador", ["ci", "nombre", "apellido", "email", "fecha_nacimiento", "id_facultad", "tipo"], jugadores))
+sql.append("\n" + ins("jugador", ["ci", "nombre", "apellido", "email", "fecha_nacimiento", "id_facultad", "tipo"], jugadores))
 
-w("\n\n")
-w(ins("torneo", ["id_torneo", "nombre", "anio", "semestre", "fecha_inicio", "fecha_fin", "estado"], [
+sql.append("\n\n")
+sql.append(ins("torneo", ["id_torneo", "nombre", "anio", "semestre", "fecha_inicio", "fecha_fin", "estado"], [
     (1, "Torneo Interfacultades 2026 – 2º semestre", 2026, 2, "2026-09-07", "2026-11-30", "inscripcion"),
     (2, "Torneo Interfacultades 2027 – 1er semestre", 2027, 1, "2027-03-15", "2027-07-09", "inscripcion"),
 ]))
 
 nombres_equipo = {1: "Los Compiladores", 2: "Balance Cero", 3: "Fallo Unánime",
                   4: "Bisturí FC", 5: "Humanistas Unidos", 6: "Inconsciente Colectivo"}
-equipos = [(fid, nombres_equipo[fid], 1, fid) for fid in range(1, 7)]
-w("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"], equipos))
+equipos = []
+for fid in range(1, 7):
+    equipos.append((fid, nombres_equipo[fid], 1, fid))
+sql.append("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"], equipos))
 
 planteles = {}
 filas = []
@@ -128,20 +142,23 @@ for fid in range(1, 7):
     camisetas = R.sample(range(1, 24), len(cis))
     for ci, nro in zip(cis, camisetas):
         filas.append((fid, ci, 1, nro))
-w(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"], filas))
+sql.append(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"], filas))
 
-w("\n\n")
+sql.append("\n\n")
 for fid in range(1, 7):
-    w(f"UPDATE equipo SET ci_capitan = {q(planteles[fid][0])} WHERE id_equipo = {fid};\n")
+    sql.append(f"UPDATE equipo SET ci_capitan = {q(planteles[fid][0])} WHERE id_equipo = {fid};\n")
 
-w("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"],
+sql.append("\n" + ins("equipo", ["id_equipo", "nombre", "id_torneo", "id_facultad"],
              [(7, "Los Compiladores 2.0", 2, 1), (8, "Sonrisa Perfecta", 2, 7)]))
-w(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"],
-      [(7, ci, 2, i + 1) for i, ci in enumerate(por_facultad[1][:6])] +
-      [(8, ci, 2, i + 10) for i, ci in enumerate(por_facultad[7][:3])]))
-w(f"UPDATE equipo SET ci_capitan = {q(por_facultad[1][1])} WHERE id_equipo = 7;\n")
+filas = []
+for i, ci in enumerate(por_facultad[1][:6]):
+    filas.append((7, ci, 2, i + 1))
+for i, ci in enumerate(por_facultad[7][:3]):
+    filas.append((8, ci, 2, i + 10))
+sql.append(ins("equipo_jugador_torneo", ["id_equipo", "ci_jugador", "id_torneo", "numero_camiseta"], filas))
+sql.append(f"UPDATE equipo SET ci_capitan = {q(por_facultad[1][1])} WHERE id_equipo = 7;\n")
 
-w("\nUPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;\n")
+sql.append("\nUPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;\n")
 
 fixture = {
     1: [(1, 6), (2, 5), (3, 4)],
@@ -168,52 +185,76 @@ sanciones = []
 id_tarjeta = 0
 amarillas_acum = {}
 
+def minuto_evento(evento):
+    return evento[2]
+
 def suspendido(ci, fecha):
-    return any(c_i == ci and d <= fecha <= d + c - 1 for c_i, d, c in sanciones)
+    for jugador, inicio, cantidad in sanciones:
+        if jugador == ci and inicio <= fecha <= inicio + cantidad - 1:
+            return True
+    return False
 
 guion_rojas = {(2, planteles[2][2])}
 guion_amarillas = {(1, planteles[4][1]), (2, planteles[4][1]), (3, planteles[4][1]),
                    (1, planteles[1][3]), (3, planteles[1][3])}
 disciplinaria = (planteles[6][4], 4, 2, "Agresión verbal al árbitro en la fecha 3")
 
-w("\n\n")
+sql.append("\n\n")
 for f in range(1, 6):
-    w(f"\n\n")
+    sql.append(f"\n\n")
     if f == 4:
-        w("\n")
-        w(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "observacion"],
+        sql.append("\n")
+        sql.append(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "observacion"],
               [(disciplinaria[0], 1, "disciplinaria", disciplinaria[1], disciplinaria[2], disciplinaria[3])]))
         sanciones.append((disciplinaria[0], disciplinaria[1], disciplinaria[2]))
-    for p in [p for p in partidos if p["fecha"] == f]:
-        w(ins("partido", ["id_partido", "id_torneo", "numero_fecha", "id_equipo_local", "id_equipo_visitante",
+    for p in partidos:
+        if p["fecha"] != f:
+            continue
+        sql.append(ins("partido", ["id_partido", "id_torneo", "numero_fecha", "id_equipo_local", "id_equipo_visitante",
                           "dia", "id_turno", "nombre_cancha", "id_complejo", "estado"],
               [(p["id"], 1, f, p["loc"], p["vis"], p["dia"], p["turno"], p["cancha"], p["comp"], "programado")]))
         if f == 5:
             if p["loc"] == 4:
-                w(f"UPDATE partido SET estado = 'cancelado' WHERE id_partido = {p['id']};  \n")
+                sql.append(f"UPDATE partido SET estado = 'cancelado' WHERE id_partido = {p['id']};  \n")
             continue
         if f == 4 and p["loc"] == 5:
-            w(f"UPDATE partido SET estado = 'postergado' WHERE id_partido = {p['id']};  \n")
+            sql.append(f"UPDATE partido SET estado = 'postergado' WHERE id_partido = {p['id']};  \n")
             continue
 
         plan = []
         for eq in (p["loc"], p["vis"]):
-            habil = [ci for ci in planteles[eq][:7] if not suspendido(ci, f)]
-            plan += [(eq, ci) for ci in habil[:6]]
-        w(ins("planilla_partido", ["id_partido", "ci_jugador", "id_equipo"], [(p["id"], ci, eq) for eq, ci in plan]))
+            habil = []
+            for ci in planteles[eq][:7]:
+                if not suspendido(ci, f):
+                    habil.append(ci)
+            for ci in habil[:6]:
+                plan.append((eq, ci))
+        filas = []
+        for eq, ci in plan:
+            filas.append((p["id"], ci, eq))
+        sql.append(ins("planilla_partido", ["id_partido", "ci_jugador", "id_equipo"], filas))
 
         goles = []
         for eq in (p["loc"], p["vis"]):
-            cis = [ci for e, ci in plan if e == eq]
+            cis = []
+            for equipo, ci in plan:
+                if equipo == eq:
+                    cis.append(ci)
             for _ in range(R.choice([0, 1, 1, 2, 2, 3, 4])):
                 goles.append((p["id"], R.choice(cis), R.randint(1, 50), False))
         if p["id"] == 5:
-            goles.append((p["id"], [ci for e, ci in plan if e == p["vis"]][3], 33, True))
-        goles.sort(key=lambda g: g[2])
-        w(ins("gol", ["id_partido", "ci_jugador", "minuto", "autogol"], goles))
+            visitantes = []
+            for equipo, ci in plan:
+                if equipo == p["vis"]:
+                    visitantes.append(ci)
+            goles.append((p["id"], visitantes[3], 33, True))
+        goles.sort(key=minuto_evento)
+        sql.append(ins("gol", ["id_partido", "ci_jugador", "minuto", "autogol"], goles))
 
         tarjetas = []
-        en_planilla = {ci for _, ci in plan}
+        en_planilla = []
+        for equipo, ci in plan:
+            en_planilla.append(ci)
         for (ff, ci) in guion_amarillas:
             if ff == f and ci in en_planilla:
                 tarjetas.append((p["id"], ci, R.randint(5, 45), "amarilla"))
@@ -222,10 +263,14 @@ for f in range(1, 6):
                 tarjetas.append((p["id"], ci, R.randint(30, 48), "roja"))
 
         for _ in range(R.randint(0, 2)):
-            ci = R.choice([c for _, c in plan])
-            if amarillas_acum.get(ci, 0) == 0 and all(t[1] != ci for t in tarjetas):
+            ci = R.choice(en_planilla)
+            tiene_tarjeta = False
+            for tarjeta in tarjetas:
+                if tarjeta[1] == ci:
+                    tiene_tarjeta = True
+            if amarillas_acum.get(ci, 0) == 0 and not tiene_tarjeta:
                 tarjetas.append((p["id"], ci, R.randint(5, 50), "amarilla"))
-        tarjetas.sort(key=lambda t: t[2])
+        tarjetas.sort(key=minuto_evento)
         filas_t = []
         nuevas_sanciones = []
         for _, ci, minuto, color in tarjetas:
@@ -240,13 +285,13 @@ for f in range(1, 6):
                 if amarillas_acum[ci] % 3 == 0:
                     nuevas_sanciones.append((ci, 1, "acumulacion de amarillas", f + 1, 1, id_tarjeta))
                     sanciones.append((ci, f + 1, 1))
-        w(ins("tarjeta", ["id_tarjeta", "id_partido", "ci_jugador", "minuto", "color"], filas_t))
+        sql.append(ins("tarjeta", ["id_tarjeta", "id_partido", "ci_jugador", "minuto", "color"], filas_t))
         if nuevas_sanciones:
-            w("\n")
-            w(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "id_tarjeta"],
+            sql.append("\n")
+            sql.append(ins("sancion_jugador", ["ci_jugador", "id_torneo", "motivo", "numero_fecha_inicio", "cantidad_fechas", "id_tarjeta"],
                   nuevas_sanciones))
 
-        w(f"UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = {p['id']};\n")
+        sql.append(f"UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = {p['id']};\n")
 
 OUT.write_text("".join(sql), encoding="utf-8")
 print("escrito", OUT)

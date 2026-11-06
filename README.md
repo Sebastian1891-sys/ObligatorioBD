@@ -2,7 +2,7 @@
 
 Sistema de gestión del Torneo Interfacultades de Fútbol 5 (Base de Datos 1 – UCU, 2º semestre 2026).
 
-- **Base de datos:** MySQL 8 — validación de campos e integridad con `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `NOT NULL` y `CHECK`; vistas para calcular resultados.
+- **Base de datos:** MySQL 8 — validación de campos e integridad con `PRIMARY KEY`, `FOREIGN KEY`, `UNIQUE`, `NOT NULL` y `CHECK`; dos vistas para consultar partidos y resultados. La tabla de posiciones se calcula en Python.
 - **Backend:** Python 3.12 + FastAPI + PyMySQL, **SQL escrito a mano, sin ORM**. Las reglas del torneo están en `backend/app/reglas.py`.
 - **Frontend:** HTML + CSS + JavaScript sin frameworks, servido por el mismo backend.
 - **Seguridad en la BD:** un usuario de MySQL por rol (`torneo_admin`, `torneo_planillero`, `torneo_auth`) con permisos diferenciados.
@@ -12,8 +12,8 @@ Sistema de gestión del Torneo Interfacultades de Fútbol 5 (Base de Datos 1 –
 .
 ├── script_completo.sql          ← los 4 scripts de base_de_datos/ concatenados (para correr de una)
 ├── base_de_datos/
-│   ├── esquema.sql              tablas, PK/FK, CHECK, índices únicos
-│   ├── logica.sql               vistas (resultados y tabla de posiciones)
+│   ├── esquema.sql              tablas, claves primarias y foráneas, UNIQUE y CHECK
+│   ├── logica.sql               vistas (partidos y resultados)
 │   ├── usuarios.sql             usuarios de BD con permisos por rol
 │   ├── datos.sql                datos maestros y de prueba (generado)
 │   ├── tools/generar_datos.py   genera datos.sql simulando el torneo
@@ -95,7 +95,7 @@ Requisitos: MySQL 8.0+ y Python 3.10+.
 
 ```bash
 pip install bcrypt
-python base_de_datos/tools/generar_datos.py      # reescribe base_de_datos/datos.sql (determinístico)
+python base_de_datos/tools/generar_datos.py      # reescribe base_de_datos/datos.sql (con semilla fija; los hashes de contraseñas varían)
 cd base_de_datos && cat esquema.sql logica.sql usuarios.sql datos.sql > ../script_completo.sql
 ```
 
@@ -107,7 +107,7 @@ cd base_de_datos && cat esquema.sql logica.sql usuarios.sql datos.sql > ../scrip
   fixture completo a una rueda (5 fechas, 15 partidos).
   - Fechas 1 a 4 disputadas (11 partidos con planilla, goles, autogol y tarjetas).
   - 1 partido **postergado** (fecha 4), 1 **cancelado** (fecha 5), 2 **programados** (fecha 5).
-  - Sanciones: una por **roja**, una por **acumulación de 3 amarillas** (generadas por la base al cargar
+  - Sanciones: una por **roja**, una por **acumulación de 3 amarillas** (calculadas por Python al cargar
     las tarjetas) y una **disciplinaria** de 2 fechas.
   - En cada plantel hay un jugador que nunca jugó (para el reporte correspondiente).
 - **Edición 2027 – 1er semestre (inscripción):** 2 equipos, uno con plantel incompleto, para probar el
@@ -135,7 +135,7 @@ Después, con el planillero: **Partidos → Planilla**, marcar jugadores, agrega
 | ABM complejos y canchas | Complejos y canchas |
 | ABM partidos con todas las restricciones | Partidos → Programar / Editar |
 | Planillas, goles y tarjetas | Partidos → Planilla (administrador y planillero) |
-| ABM sanciones | Sanciones (las automáticas las genera la base) |
+| ABM sanciones | Sanciones (las automáticas las calcula Python) |
 | 9 reportes + 3 propios | Reportes |
 | Extra | ABM de ediciones (con avance de estado), facultades y usuarios |
 

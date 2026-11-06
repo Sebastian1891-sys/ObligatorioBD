@@ -5,7 +5,8 @@ USE torneo_ucu;
 CREATE TABLE login (
     correo      VARCHAR(120) NOT NULL,
     contrasena  VARCHAR(100) NOT NULL,
-    rol         ENUM('administrador','planillero') NOT NULL,
+    rol         VARCHAR(20) NOT NULL,
+    CHECK (rol IN ('administrador','planillero')),
     PRIMARY KEY (correo),
     CHECK (correo LIKE '%_@_%._%'),
     CHECK (CHAR_LENGTH(contrasena) >= 50)
@@ -26,7 +27,8 @@ CREATE TABLE jugador (
     email            VARCHAR(120) NOT NULL,
     fecha_nacimiento DATE         NOT NULL,
     id_facultad      INT          NOT NULL,
-    tipo             ENUM('grado','posgrado','docente','funcionario') NOT NULL,
+    tipo             VARCHAR(20) NOT NULL,
+    CHECK (tipo IN ('grado','posgrado','docente','funcionario')),
     PRIMARY KEY (ci),
     UNIQUE (email),
     FOREIGN KEY (id_facultad) REFERENCES facultad(id_facultad),
@@ -39,11 +41,12 @@ CREATE TABLE jugador (
 CREATE TABLE torneo (
     id_torneo    INT NOT NULL AUTO_INCREMENT,
     nombre       VARCHAR(100) NOT NULL,
-    anio         SMALLINT NOT NULL,
-    semestre     TINYINT  NOT NULL,
+    anio         INT NOT NULL,
+    semestre     INT  NOT NULL,
     fecha_inicio DATE NOT NULL,
     fecha_fin    DATE NOT NULL,
-    estado       ENUM('inscripcion','en curso','finalizado') NOT NULL DEFAULT 'inscripcion',
+    estado       VARCHAR(20) NOT NULL DEFAULT 'inscripcion',
+    CHECK (estado IN ('inscripcion','en curso','finalizado')),
     PRIMARY KEY (id_torneo),
     UNIQUE (anio, semestre),
     CHECK (anio BETWEEN 2000 AND 2100),
@@ -71,7 +74,7 @@ CREATE TABLE equipo_jugador_torneo (
     id_equipo       INT        NOT NULL,
     ci_jugador      VARCHAR(8) NOT NULL,
     id_torneo       INT        NOT NULL,
-    numero_camiseta TINYINT    NOT NULL,
+    numero_camiseta INT    NOT NULL,
     PRIMARY KEY (id_equipo, ci_jugador),
 
     UNIQUE (ci_jugador, id_torneo),
@@ -98,14 +101,15 @@ CREATE TABLE complejo (
 CREATE TABLE cancha (
     nombre_cancha VARCHAR(50) NOT NULL,
     id_complejo   INT NOT NULL,
-    superficie    ENUM('sintetico','parquet') NOT NULL,
+    superficie    VARCHAR(20) NOT NULL,
+    CHECK (superficie IN ('sintetico','parquet')),
     techada       BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id_complejo, nombre_cancha),
     FOREIGN KEY (id_complejo) REFERENCES complejo(id_complejo) ON DELETE CASCADE
 );
 
 CREATE TABLE turno (
-    id_turno    TINYINT NOT NULL,
+    id_turno    INT NOT NULL,
     hora_inicio TIME NOT NULL,
     hora_fin    TIME NOT NULL,
     PRIMARY KEY (id_turno),
@@ -117,18 +121,18 @@ CREATE TABLE turno (
 CREATE TABLE partido (
     id_partido          INT NOT NULL AUTO_INCREMENT,
     id_torneo           INT NOT NULL,
-    numero_fecha        TINYINT NOT NULL,
+    numero_fecha        INT NOT NULL,
     id_equipo_local     INT NOT NULL,
     id_equipo_visitante INT NOT NULL,
     dia                 DATE NOT NULL,
-    id_turno            TINYINT NOT NULL,
+    id_turno            INT NOT NULL,
     nombre_cancha       VARCHAR(50) NOT NULL,
     id_complejo         INT NOT NULL,
-    estado              ENUM('programado','jugado','postergado','cancelado') NOT NULL DEFAULT 'programado',
+    estado              VARCHAR(20) NOT NULL DEFAULT 'programado',
+    CHECK (estado IN ('programado','jugado','postergado','cancelado')),
     jugado_en           DATETIME NULL,
 
     PRIMARY KEY (id_partido),
-    KEY ix_partido_fecha (id_torneo, numero_fecha),
 
     FOREIGN KEY (id_torneo) REFERENCES torneo(id_torneo),
 
@@ -154,9 +158,10 @@ CREATE TABLE gol (
     id_gol     INT NOT NULL AUTO_INCREMENT,
     id_partido INT NOT NULL,
     ci_jugador VARCHAR(8) NOT NULL,
-    minuto     TINYINT NOT NULL,
+    minuto     INT NOT NULL,
     autogol    BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id_gol),
+
     FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
     CHECK (minuto BETWEEN 0 AND 60)
 );
@@ -165,8 +170,9 @@ CREATE TABLE tarjeta (
     id_tarjeta INT NOT NULL AUTO_INCREMENT,
     id_partido INT NOT NULL,
     ci_jugador VARCHAR(8) NOT NULL,
-    minuto     TINYINT NOT NULL,
-    color      ENUM('amarilla','roja') NOT NULL,
+    minuto     INT NOT NULL,
+    color      VARCHAR(20) NOT NULL,
+    CHECK (color IN ('amarilla','roja')),
     PRIMARY KEY (id_tarjeta),
     FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
     CHECK (minuto BETWEEN 0 AND 60)
@@ -176,14 +182,14 @@ CREATE TABLE sancion_jugador (
     id_sancion          INT NOT NULL AUTO_INCREMENT,
     ci_jugador          VARCHAR(8) NOT NULL,
     id_torneo           INT NOT NULL,
-    motivo              ENUM('roja','acumulacion de amarillas','disciplinaria') NOT NULL,
-    numero_fecha_inicio TINYINT NOT NULL,
-    cantidad_fechas     TINYINT NOT NULL DEFAULT 1,
+    motivo              VARCHAR(24) NOT NULL,
+    CHECK (motivo IN ('roja','acumulacion de amarillas','disciplinaria')),
+    numero_fecha_inicio INT NOT NULL,
+    cantidad_fechas     INT NOT NULL DEFAULT 1,
     id_tarjeta          INT NULL,
     observacion         VARCHAR(255) NULL,
     creada_en           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id_sancion),
-    KEY ix_sancion_jugador_torneo (ci_jugador, id_torneo),
     FOREIGN KEY (ci_jugador) REFERENCES jugador(ci),
     FOREIGN KEY (id_torneo)  REFERENCES torneo(id_torneo),
     FOREIGN KEY (id_tarjeta) REFERENCES tarjeta(id_tarjeta),
@@ -193,7 +199,6 @@ CREATE TABLE sancion_jugador (
         (motivo = 'disciplinaria' AND id_tarjeta IS NULL) OR
         (motivo <> 'disciplinaria' AND id_tarjeta IS NOT NULL AND cantidad_fechas = 1))
 );
-
 USE torneo_ucu;
 
 CREATE VIEW v_partido AS
@@ -211,39 +216,17 @@ SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.dia, p.id_turno,
 CREATE VIEW v_resultado AS
 SELECT p.id_partido, p.id_torneo, p.numero_fecha, p.estado,
        p.id_equipo_local, p.id_equipo_visitante,
-       COALESCE(SUM(CASE WHEN (pl.id_equipo = p.id_equipo_local     AND NOT g.autogol)
-                           OR (pl.id_equipo = p.id_equipo_visitante AND g.autogol) THEN 1 ELSE 0 END), 0) AS goles_local,
-       COALESCE(SUM(CASE WHEN (pl.id_equipo = p.id_equipo_visitante AND NOT g.autogol)
-                           OR (pl.id_equipo = p.id_equipo_local     AND g.autogol) THEN 1 ELSE 0 END), 0) AS goles_visitante
-  FROM partido p
-  LEFT JOIN gol g               ON g.id_partido = p.id_partido
-  LEFT JOIN planilla_partido pl ON pl.id_partido = g.id_partido AND pl.ci_jugador = g.ci_jugador
- GROUP BY p.id_partido, p.id_torneo, p.numero_fecha, p.estado, p.id_equipo_local, p.id_equipo_visitante;
-
-CREATE VIEW v_resultado_equipo AS
-SELECT id_torneo, id_partido, numero_fecha, id_equipo_local AS id_equipo,
-       goles_local AS gf, goles_visitante AS gc
-  FROM v_resultado WHERE estado = 'jugado'
-UNION ALL
-SELECT id_torneo, id_partido, numero_fecha, id_equipo_visitante,
-       goles_visitante, goles_local
-  FROM v_resultado WHERE estado = 'jugado';
-
-CREATE VIEW v_tabla_posiciones AS
-SELECT e.id_torneo, e.id_equipo, e.nombre AS equipo, f.nombre AS facultad,
-       COUNT(r.id_partido)                         AS pj,
-       SUM(CASE WHEN r.gf > r.gc THEN 1 ELSE 0 END)  AS pg,
-       SUM(CASE WHEN r.gf = r.gc THEN 1 ELSE 0 END)  AS pe,
-       SUM(CASE WHEN r.gf < r.gc THEN 1 ELSE 0 END)  AS pp,
-       COALESCE(SUM(r.gf), 0)                      AS gf,
-       COALESCE(SUM(r.gc), 0)                      AS gc,
-       COALESCE(SUM(r.gf), 0) - COALESCE(SUM(r.gc), 0) AS dg,
-       COALESCE(SUM(CASE WHEN r.gf > r.gc THEN 3 WHEN r.gf = r.gc THEN 1 ELSE 0 END), 0) AS pts
-  FROM equipo e
-  JOIN facultad f ON f.id_facultad = e.id_facultad
-  LEFT JOIN v_resultado_equipo r ON r.id_equipo = e.id_equipo
- GROUP BY e.id_torneo, e.id_equipo, e.nombre, f.nombre;
-
+       (SELECT COUNT(*) FROM gol g
+         JOIN planilla_partido pl ON pl.id_partido = g.id_partido AND pl.ci_jugador = g.ci_jugador
+        WHERE g.id_partido = p.id_partido
+          AND ((pl.id_equipo = p.id_equipo_local AND g.autogol = FALSE)
+            OR (pl.id_equipo = p.id_equipo_visitante AND g.autogol = TRUE))) AS goles_local,
+       (SELECT COUNT(*) FROM gol g
+         JOIN planilla_partido pl ON pl.id_partido = g.id_partido AND pl.ci_jugador = g.ci_jugador
+        WHERE g.id_partido = p.id_partido
+          AND ((pl.id_equipo = p.id_equipo_visitante AND g.autogol = FALSE)
+            OR (pl.id_equipo = p.id_equipo_local AND g.autogol = TRUE))) AS goles_visitante
+  FROM partido p;
 USE torneo_ucu;
 
 DROP USER IF EXISTS 'torneo_auth'@'%', 'torneo_admin'@'%', 'torneo_planillero'@'%';
@@ -268,8 +251,6 @@ GRANT SELECT ON torneo_ucu.turno                 TO 'torneo_planillero'@'%';
 GRANT SELECT, INSERT, DELETE ON torneo_ucu.sancion_jugador TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_partido             TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado           TO 'torneo_planillero'@'%';
-GRANT SELECT ON torneo_ucu.v_resultado_equipo    TO 'torneo_planillero'@'%';
-GRANT SELECT ON torneo_ucu.v_tabla_posiciones    TO 'torneo_planillero'@'%';
 
 GRANT SELECT ON torneo_ucu.partido TO 'torneo_planillero'@'%';
 GRANT UPDATE (estado, jugado_en) ON torneo_ucu.partido TO 'torneo_planillero'@'%';
@@ -279,7 +260,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.gol              TO 'torneo_p
 GRANT SELECT, INSERT, UPDATE, DELETE ON torneo_ucu.tarjeta          TO 'torneo_planillero'@'%';
 
 FLUSH PRIVILEGES;
-
 USE torneo_ucu;
 
 INSERT INTO login (correo, contrasena, rol) VALUES
@@ -611,6 +591,7 @@ INSERT INTO gol (id_partido, ci_jugador, minuto, autogol) VALUES
   (6, '44636211', 48, FALSE);
 INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (8, 6, '39805510', 40, 'roja');
+
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, id_tarjeta) VALUES
   ('39805510', 1, 'roja', 3, 1, 8);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 6;

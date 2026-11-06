@@ -22,8 +22,6 @@ GRANT SELECT ON torneo_ucu.turno                 TO 'torneo_planillero'@'%';
 GRANT SELECT, INSERT, DELETE ON torneo_ucu.sancion_jugador TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_partido             TO 'torneo_planillero'@'%';
 GRANT SELECT ON torneo_ucu.v_resultado           TO 'torneo_planillero'@'%';
-GRANT SELECT ON torneo_ucu.v_resultado_equipo    TO 'torneo_planillero'@'%';
-GRANT SELECT ON torneo_ucu.v_tabla_posiciones    TO 'torneo_planillero'@'%';
 
 GRANT SELECT ON torneo_ucu.partido TO 'torneo_planillero'@'%';
 GRANT UPDATE (estado, jugado_en) ON torneo_ucu.partido TO 'torneo_planillero'@'%';
