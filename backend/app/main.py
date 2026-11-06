@@ -1,6 +1,5 @@
 """
-Sistema de gestión del Torneo Interfacultades de Fútbol 5 – UCU
-Backend: FastAPI + PyMySQL (SQL a mano, sin ORM). Sirve también el frontend.
+Sistema de gestión del Torneo Interfacultades de Fútbol 5 UCU
 """
 from pathlib import Path
 
@@ -19,7 +18,6 @@ for r in (auth, maestros, torneos, partidos, sanciones, reportes):
 
 @app.exception_handler(RequestValidationError)
 async def validacion(_: Request, exc: RequestValidationError):
-    """Devuelve los errores de validación de Pydantic en un formato simple para el frontend."""
     errores = []
     for e in exc.errors():
         campo = ".".join(str(x) for x in e["loc"] if x != "body")
@@ -33,9 +31,9 @@ def health():
     return {"ok": True}
 
 
-# ---- frontend estático (SPA) ----
+#frontend estático (spa)
 FRONT = Path(__file__).resolve().parent.parent.parent / "frontend"
-if not FRONT.exists():                                   # dentro del contenedor
+if not FRONT.exists():                                   # adentro del contenedor
     FRONT = Path("/app/frontend")
 if FRONT.exists():
     app.mount("/static", StaticFiles(directory=FRONT), name="static")

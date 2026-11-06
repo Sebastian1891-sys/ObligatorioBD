@@ -5,7 +5,7 @@ DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "3306"))
 DB_NAME = os.getenv("DB_NAME", "torneo_ucu")
 
-# Un usuario de base de datos por rol (permisos diferenciados en usuarios.sql)
+#Un usuario de base de datos por rol
 DB_USERS = {
     "auth": (os.getenv("DB_AUTH_USER", "torneo_auth"), os.getenv("DB_AUTH_PASSWORD", "Auth_Torneo_2026!")),
     "administrador": (os.getenv("DB_ADMIN_USER", "torneo_admin"), os.getenv("DB_ADMIN_PASSWORD", "Admin_Torneo_2026!")),

@@ -1,12 +1,3 @@
-"""
-Acceso a datos SIN ORM: PyMySQL + SQL parametrizado.
-
-- Cada conexión se abre con el usuario de BD del rol que corresponde
-  (auth / administrador / planillero).
-- Todas las consultas usan parámetros (%s): nunca se concatena input del
-  usuario en el SQL, lo que evita inyección SQL.
-- Los errores de MySQL se traducen a respuestas HTTP con mensajes legibles.
-"""
 import datetime as dt
 from contextlib import contextmanager
 from decimal import Decimal
@@ -16,7 +7,7 @@ from fastapi import HTTPException
 
 from . import config
 
-# Mensajes para los CHECK del esquema
+# Mensajes para los check del esquema
 CHECK_MSG = {
     "chk_jugador_ci": "La cédula debe tener 7 u 8 dígitos, sin puntos ni guion",
     "chk_turno_1h": "Cada turno dura exactamente una hora",
@@ -64,9 +55,6 @@ def _connect(rol: str):
 
 
 def _buscar_mensaje(texto_error: str, mensajes: dict, por_defecto: str) -> str:
-    """MySQL incluye el nombre de la restricción en el texto del error
-    (por ejemplo "Duplicate entry ... for key 'equipo.uq_equipo_nombre_torneo'").
-    Se busca cuál de nuestras restricciones aparece y se devuelve su mensaje."""
     for nombre, mensaje in mensajes.items():
         if f"'{nombre}'" in texto_error or f".{nombre}'" in texto_error:
             return mensaje
@@ -74,18 +62,17 @@ def _buscar_mensaje(texto_error: str, mensajes: dict, por_defecto: str) -> str:
 
 
 def traducir_error(e: pymysql.MySQLError) -> HTTPException:
-    """Convierte un error de MySQL en una respuesta HTTP con un mensaje entendible."""
     code = e.args[0] if e.args else 0
     msg = str(e.args[1]) if len(e.args) > 1 else str(e)
-    if code == 1062:                                   # se violó un UNIQUE o la PRIMARY KEY
+    if code == 1062:                                   
         return HTTPException(409, _buscar_mensaje(msg, UNIQUE_MSG, "Registro duplicado"))
-    if code == 3819:                                   # se violó un CHECK
+    if code == 3819:                                   
         return HTTPException(400, _buscar_mensaje(msg, CHECK_MSG, "Dato inválido"))
-    if code in (1451, 1217):                           # FK: hay filas que dependen de esta
+    if code in (1451, 1217):                           
         return HTTPException(409, "No se puede eliminar o modificar: tiene registros asociados")
-    if code == 1452:                                   # FK: el dato referenciado no existe
+    if code == 1452:                                   
         return HTTPException(400, "Referencia inválida: alguno de los datos relacionados no existe")
-    if code in (1142, 1143, 1370):                     # GRANT: el usuario de BD del rol no tiene permiso
+    if code in (1142, 1143, 1370):                     
         return HTTPException(403, "Tu rol no tiene permiso para esta operación (rechazado por la base de datos)")
     if code in (1048, 1364):
         return HTTPException(400, "Falta un dato obligatorio")
@@ -98,10 +85,10 @@ def traducir_error(e: pymysql.MySQLError) -> HTTPException:
 
 def _limpiar(v):
     """Pasa los tipos de MySQL a valores que se pueden mandar como JSON."""
-    if isinstance(v, dt.timedelta):                    # columnas TIME
+    if isinstance(v, dt.timedelta):                    # columnas time
         s = int(v.total_seconds())
         return f"{s // 3600:02d}:{s % 3600 // 60:02d}"
-    if isinstance(v, Decimal):                         # SUM/AVG de MySQL devuelven DECIMAL
+    if isinstance(v, Decimal):                         # SUM/AVG de mysql devuelven decimal
         return int(v) if v == v.to_integral_value() else float(v)
     if isinstance(v, dt.datetime):
         return v.isoformat(sep=" ", timespec="minutes")
@@ -111,28 +98,26 @@ def _limpiar(v):
 
 
 class Cursor:
-    """Cursor de PyMySQL con cuatro atajos para no repetir código en los endpoints.
-    En todos, `params` son los valores que reemplazan a los %s del SQL."""
 
     def __init__(self, cur):
         self._cur = cur
 
     def execute(self, sql, params=None) -> int:
-        """INSERT / UPDATE / DELETE. Devuelve cuántas filas se afectaron."""
+        """insert, update, delete. Devuelve cuántas filas fueron afectadas."""
         return self._cur.execute(sql, params)
 
     def all(self, sql, params=None) -> list[dict]:
-        """SELECT que devuelve todas las filas, cada una como diccionario {columna: valor}."""
+        """select devuelve todas las filas, c/u como diccionario (columna: valor)."""
         self._cur.execute(sql, params)
         return [{k: _limpiar(v) for k, v in r.items()} for r in self._cur.fetchall()]
 
     def one(self, sql, params=None) -> dict | None:
-        """SELECT que devuelve la primera fila, o None si no hay ninguna."""
+        """select devuelve la primera fila, o none si no hay ninguna."""
         rows = self.all(sql, params)
         return rows[0] if rows else None
 
     def one_or_404(self, sql, params=None, que="Registro") -> dict:
-        """Como one(), pero si no hay fila responde 404 '<que> no encontrado'."""
+        """Como one, pero si no hay fila responde 404 'que no encontrado'."""
         r = self.one(sql, params)
         if r is None:
             raise HTTPException(404, f"{que} no encontrado")
@@ -140,16 +125,12 @@ class Cursor:
 
     @property
     def lastrowid(self):
-        """id AUTO_INCREMENT generado por el último INSERT."""
+        """id auto_increment generado por el último insert."""
         return self._cur.lastrowid
 
 
 @contextmanager
 def transaccion(rol: str):
-    """Un request = una transacción.
-    Abre la conexión con el usuario de BD del rol, deja usar el cursor, y al
-    terminar hace COMMIT. Si algo falla (una regla, un error de MySQL), hace
-    ROLLBACK y no queda nada guardado a medias."""
     try:
         conn = _connect(rol)
     except pymysql.MySQLError as e:

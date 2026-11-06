@@ -1,5 +1,4 @@
-# Imagen de la aplicación (backend FastAPI + frontend estático)
-# Se construye desde la raíz del repo:  docker compose build
+
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TZ=America/Montevideo

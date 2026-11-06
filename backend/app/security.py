@@ -1,7 +1,3 @@
-"""
-Autenticación: contraseñas con bcrypt y token firmado con HMAC-SHA256
-(formato tipo JWT simplificado, implementado con la librería estándar).
-"""
 import base64
 import hashlib
 import hmac
@@ -65,7 +61,6 @@ def usuario_actual(cred: HTTPAuthorizationCredentials | None = Depends(bearer)) 
     if cred is None:
         raise HTTPException(401, "Iniciá sesión")
     datos = leer_token(cred.credentials)
-    # el usuario tiene que seguir existiendo con el mismo rol
     with transaccion("auth") as db:
         u = db.one("SELECT correo, rol FROM login WHERE correo = %s", (datos["sub"],))
     if not u or u["rol"] != datos["rol"]:
@@ -79,7 +74,6 @@ def solo_admin(u: dict = Depends(usuario_actual)) -> dict:
     return u
 
 
-# Dependencias que entregan un cursor conectado con el usuario de BD del rol
 def db_usuario(u: dict = Depends(usuario_actual)):
     with transaccion(u["rol"]) as db:
         yield db
