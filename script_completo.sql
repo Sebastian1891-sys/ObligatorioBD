@@ -1,21 +1,9 @@
--- =====================================================================
---  Torneo Interfacultades de Fútbol 5 – UCU
---  esquema.sql : creación de la base y de todas las tablas
---  MySQL 8.0+
---
---  En la base quedan las validaciones de campos y de integridad:
---  PRIMARY KEY, FOREIGN KEY, UNIQUE, NOT NULL y CHECK.
---  Las reglas del torneo (cupos del plantel, 48 h, sanciones, etc.)
---  se validan en el backend, en backend/app/reglas.py.
--- =====================================================================
-
 DROP DATABASE IF EXISTS torneo_ucu;
 CREATE DATABASE torneo_ucu CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE torneo_ucu;
 
--- ---------------------------------------------------------------------
 -- Usuarios del sistema
--- ---------------------------------------------------------------------
+
 CREATE TABLE login (
     correo      VARCHAR(120) NOT NULL,
     contrasena  VARCHAR(100) NOT NULL COMMENT 'hash bcrypt, nunca texto plano',
@@ -25,9 +13,8 @@ CREATE TABLE login (
     CONSTRAINT chk_login_hash   CHECK (CHAR_LENGTH(contrasena) >= 50)
 );
 
--- ---------------------------------------------------------------------
 -- Datos maestros
--- ---------------------------------------------------------------------
+
 CREATE TABLE facultad (
     id_facultad INT NOT NULL AUTO_INCREMENT,
     nombre      VARCHAR(100) NOT NULL,
@@ -99,9 +86,8 @@ CREATE TABLE equipo_jugador_torneo (
     CONSTRAINT chk_ejt_camiseta CHECK (numero_camiseta BETWEEN 1 AND 99)
 );
 
--- ---------------------------------------------------------------------
 -- Infraestructura
--- ---------------------------------------------------------------------
+
 CREATE TABLE complejo (
     id_complejo  INT NOT NULL AUTO_INCREMENT,
     nombre       VARCHAR(100) NOT NULL,
@@ -134,9 +120,9 @@ CREATE TABLE turno (
     CONSTRAINT chk_turno_1h     CHECK (hora_fin = ADDTIME(hora_inicio, '01:00:00'))
 );
 
--- ---------------------------------------------------------------------
+
 -- Partidos
--- ---------------------------------------------------------------------
+
 CREATE TABLE partido (
     id_partido          INT NOT NULL AUTO_INCREMENT,
     id_torneo           INT NOT NULL,
@@ -181,7 +167,6 @@ CREATE TABLE gol (
     minuto     TINYINT NOT NULL,
     autogol    BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (id_gol),
-    -- solo puede convertir quien figura en la planilla
     CONSTRAINT fk_gol_planilla FOREIGN KEY (id_partido, ci_jugador) REFERENCES planilla_partido(id_partido, ci_jugador),
     CONSTRAINT chk_gol_minuto  CHECK (minuto BETWEEN 0 AND 60)
 );
@@ -218,13 +203,7 @@ CREATE TABLE sancion_jugador (
         (motivo = 'disciplinaria' AND id_tarjeta IS NULL) OR
         (motivo <> 'disciplinaria' AND id_tarjeta IS NOT NULL AND cantidad_fechas = 1))
 );
--- =====================================================================
---  logica.sql : vistas usadas por la aplicación y los reportes
---
---  El resultado de un partido NO se guarda en ninguna columna: se calcula
---  siempre a partir de los goles cargados (como pide la letra). Estas
---  vistas hacen ese cálculo para no repetirlo en cada consulta.
--- =====================================================================
+
 USE torneo_ucu;
 
 -- Partido con nombres y horario legibles
@@ -529,9 +508,9 @@ UPDATE equipo SET ci_capitan = '35443653' WHERE id_equipo = 7;
 
 UPDATE torneo SET estado = 'en curso' WHERE id_torneo = 1;
 
--- ===================== FIXTURE Y PARTIDOS =====================
+--FIXTURE Y PARTIDOS
 
--- ---------- Fecha 1 ----------
+--Fecha 1
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (1, 1, 1, 1, 6, '2026-09-14', 2, 'Cancha 2', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -606,7 +585,7 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (4, 3, '49997145', 6, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 3;
 
--- ---------- Fecha 2 ----------
+--Fecha 2
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (4, 1, 2, 5, 1, '2026-09-21', 3, 'Central', 2, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -679,12 +658,11 @@ INSERT INTO gol (id_partido, ci_jugador, minuto, autogol) VALUES
   (6, '44636211', 48, FALSE);
 INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (8, 6, '39805510', 40, 'roja');
--- sanciones automáticas que generan estas tarjetas
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, id_tarjeta) VALUES
   ('39805510', 1, 'roja', 3, 1, 8);
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 6;
 
--- ---------- Fecha 3 ----------
+--Fecha 3
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (7, 1, 3, 1, 4, '2026-09-28', 1, 'Cancha 1', 1, 'programado');
 INSERT INTO planilla_partido (id_partido, ci_jugador, id_equipo) VALUES
@@ -755,8 +733,7 @@ INSERT INTO tarjeta (id_tarjeta, id_partido, ci_jugador, minuto, color) VALUES
   (13, 9, '60310740', 50, 'amarilla');
 UPDATE partido SET estado = 'jugado', jugado_en = NOW() WHERE id_partido = 9;
 
--- ---------- Fecha 4 ----------
--- sanción disciplinaria resuelta por la organización antes de la fecha 4
+--Fecha 4
 INSERT INTO sancion_jugador (ci_jugador, id_torneo, motivo, numero_fecha_inicio, cantidad_fechas, observacion) VALUES
   ('61312733', 1, 'disciplinaria', 4, 2, 'Agresión verbal al árbitro en la fecha 3');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
@@ -805,7 +782,7 @@ INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_eq
   (12, 1, 4, 5, 6, '2026-10-05', 4, 'Cancha A', 3, 'programado');
 UPDATE partido SET estado = 'postergado' WHERE id_partido = 12;  -- lluvia, cancha sin techo
 
--- ---------- Fecha 5 ----------
+--Fecha 5
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
   (13, 1, 5, 1, 2, '2026-11-16', 3, 'Central', 2, 'programado');
 INSERT INTO partido (id_partido, id_torneo, numero_fecha, id_equipo_local, id_equipo_visitante, dia, id_turno, nombre_cancha, id_complejo, estado) VALUES
